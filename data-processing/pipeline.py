@@ -314,3 +314,139 @@ def filter_question(question: str, relevant_posts: list[dict] | None = None) -> 
 
     debug("STEP 1 — filter_question | parsed result", f"keep={keep}  reason={reason}")
     return {"keep": keep, "reason": reason}
+
+# ---------------------------------------------------------------------------
+# Step 2 — Find correct answer
+# ---------------------------------------------------------------------------
+
+FIND_ANSWER_SYSTEM = """\
+You are reviewing a math forum thread. Given the problem and the list of posts, \
+find the most complete and correct answer.
+
+Rules:
+- If the post that states the problem ALSO contains a full worked solution \
+  (e.g. a tutorial post with "Przykład N … solution …"), extract that solution \
+  directly from the problem post.
+- Otherwise, look through the reply posts and pick the one with the most \
+  complete and mathematically correct solution.
+- Ignore posts that are pure meta-discussion (corrections about notation, arguments \
+  about style) without actual math content.
+- If no satisfactory answer exists anywhere, return exactly: NO_ANSWER
+
+Return ONE line only:
+POST_INDEX: <integer index of the post that contains the best answer>
+
+--- Example A: inline solution in the problem post (tutorial thread) ---
+Problem: \\lim_{n\\to\\infty}(\\sqrt{n^2+2n}-n)
+Posts:
+  [0] nauczyciel (contains_images=False): "\\text{Przykład 1} \\lim_{n\\to\\infty}(\\sqrt{n^2+2n}-n) \\text{ Niech } a=\\sqrt{n^2+2n} \\text{, } b=n \\text{. Korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b} \\text{:} =\\lim_{n\\to\\infty}\\frac{n^2+2n-n^2}{\\sqrt{n^2+2n}+n}=\\lim_{n\\to\\infty}\\frac{2n}{\\sqrt{n^2+2n}+n} \\text{ Dzielimy przez } n \\text{: } =\\frac{2}{\\sqrt{1+2/n}+1}\\to\\frac{2}{2}=1"
+
+POST_INDEX: 0
+
+--- Example B: answer in a reply post (Q&A thread) ---
+Problem: \\text{Udowodnić, że } f(m)= \\frac{2}{3}(-1)^{m+1}m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}
+Posts:
+  [0] mol_ksiazkowy (contains_images=False): "\\text{Niech } f(m)= \\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3} \\text{ Udowodnić, że ...}"
+  [1] azanus111 (contains_images=False): "\\text{Ustalmy } m \\text{, niech: } f(m)= \\prod_{n \\neq m} \\frac{n-m}{n+m} \\cdot \\prod_{n \\neq m} \\frac{n^2+nm+m^2}{n^2-nm+m^2} \\text{ ...cnd}"
+  [2] Jan Kraszewski (contains_images=False): "\\text{No cóż, } (-1)^{m-1}=(-1)^{m+1}"
+
+POST_INDEX: 1
+"""
+
+
+def find_answer(question: str, posts: list[dict], relevant_indices: list[int],
+                has_inline_solution: bool = False) -> tuple[str | None, int | None]:
+    """
+    Returns (answer_text, source_post_index), or (None, None) if no answer found.
+    has_inline_solution=True hints that the answer may be inside the question post itself.
+    """
+    relevant = [p for p in posts if p["index"] in relevant_indices]
+    posts_text = "\n".join(
+        f"  [{p['index']}] {p['author']} (contains_images={p.get('contains_images', False)}): "
+        f"{p['content'][:800]}"
+        for p in relevant
+    )
+    hint = (
+        " Note: this problem post already contains the worked solution — extract it from there."
+        if has_inline_solution else ""
+    )
+    user_prompt = (
+        f"Problem: {question[:1000]}\n\n"
+        f"Posts:\n{posts_text}\n\n"
+        f"Find the best answer.{hint}"
+    )
+
+    raw = call_llm(FIND_ANSWER_SYSTEM, user_prompt).strip()
+    debug("STEP 2 — find_answer | raw LLM output", raw)
+
+    if "NO_ANSWER" in raw or not raw:
+        debug("STEP 2 — find_answer | result", "NO ANSWER FOUND")
+        return None, None
+
+    # Parse POST_INDEX — LLM only returns the index, we fetch the full post ourselves
+    post_index = None
+    for line in raw.splitlines():
+        if line.startswith("POST_INDEX:"):
+            try:
+                post_index = int(line.split(":", 1)[1].strip())
+            except ValueError:
+                pass
+
+    if post_index is None:
+        debug("STEP 2 — find_answer | result", "Could not parse POST_INDEX")
+        return None, None
+
+    # Return the FULL original post content (not the LLM's copy of it)
+    post_map = {p["index"]: p for p in posts}
+    answer_post = post_map.get(post_index)
+    if answer_post is None:
+        debug("STEP 2 — find_answer | result", f"POST_INDEX {post_index} not found in posts")
+        return None, None
+
+    answer_text = answer_post["content"]
+    debug("STEP 2 — find_answer | parsed result", f"post_index={post_index}\n{answer_text[:300]}")
+    return answer_text, post_index
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — Rewrite answer (chain-of-thought)
+# ---------------------------------------------------------------------------
+
+REWRITE_SYSTEM = """\
+You are formatting a math forum answer into numbered steps. \
+Your ONLY job is to split the answer into steps and fix LaTeX syntax. \
+Do NOT add, remove, or change any mathematical content.
+
+Rules:
+- Split the answer into numbered steps: "Krok 1:", "Krok 2:", etc.
+- Each step = one logical sentence or one formula from the original
+- Copy all text and formulas EXACTLY — do not paraphrase, do not add explanations
+- Fix LaTeX syntax only: use $...$ for inline math, \\[ ... \\] for display math
+- End with \\textbf{Wynik:} and the final result in \\[ ... \\]
+- If the original has no final numeric result, skip \\textbf{Wynik:}
+
+--- Example ---
+Raw answer:
+  "\\text{Niech } a=\\sqrt{n^2+2n-1} \\text{, } b=n \\text{, korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b} \\text{, liczymy i wychodzi 1}"
+
+Rewritten:
+
+Krok 1: Niech $a=\\sqrt{n^2+2n-1}$, $b=n$, korzystamy ze wzoru $a-b=\\frac{a^2-b^2}{a+b}$.
+
+Krok 2: Liczymy i wychodzi 1.
+
+\\textbf{Wynik:}
+\\[ \\lim_{n \\to \\infty}(\\sqrt{n^2+2n-1}-n) = 1 \\]
+"""
+
+
+def rewrite_answer(question: str, raw_answer: str) -> str:
+    user_prompt = (
+        f"Problem: {question[:1000]}\n\n"
+        f"Raw answer: {raw_answer[:2000]}\n\n"
+        "Rewritten solution:"
+    )
+    result = call_llm(REWRITE_SYSTEM, user_prompt).strip()
+    debug("STEP 3 — rewrite_answer | full rewritten solution", result)
+    return result
+
