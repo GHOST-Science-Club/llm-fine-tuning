@@ -146,3 +146,171 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"].strip()
 
+# ---------------------------------------------------------------------------
+# Step 0 — Split tasks
+# ---------------------------------------------------------------------------
+
+SPLIT_SYSTEM = """\
+You are a math forum analyst. A forum thread may contain one or multiple distinct \
+math problems. Your job is to identify each separate problem in the thread and \
+list the post indices that are relevant to each problem.
+
+Return ONLY a JSON array. Each element has:
+  "question": the full problem statement (copy verbatim from the post, keep ALL LaTeX intact)
+  "post_indices": list of integer post indices relevant to this problem
+  "has_inline_solution": true if the same post that states the problem also contains a worked solution
+
+IMPORTANT rules:
+- Look for numbered examples inside a single post: markers like "Przykład 1", "Przykład 2",
+  "Zadanie 1", "Example 1" each signal a separate task.
+- When multiple examples live in one post (index N), set post_indices to [N] for each of them
+  (plus any later posts that specifically discuss that example).
+- If the post walks through the full solution immediately after the problem statement,
+  set has_inline_solution to true.
+- If the thread has only one problem, return a single-element array.
+
+--- Example A: numbered examples inside one tutorial post ---
+Thread title: "Sprzężenie – liczenie granic"
+Posts:
+  [0] author: nauczyciel — "\\text{Przykład 1} \\lim_{n\\to\\infty}(\\sqrt{n^2+2n}-n) \\text{ ...pełne rozwiązanie... Przykład 2} a_n = n^3-\\sqrt{n^6-5n^3} \\text{ ...pełne rozwiązanie...}"
+
+Output:
+[
+  {
+    "question": "\\lim_{n\\to\\infty}(\\sqrt{n^2+2n}-n)",
+    "post_indices": [0],
+    "has_inline_solution": true
+  },
+  {
+    "question": "\\text{Oblicz } \\lim_{n\\to\\infty} a_n \\text{ gdzie } a_n = n^3-\\sqrt{n^6-5n^3}",
+    "post_indices": [0],
+    "has_inline_solution": true
+  }
+]
+
+--- Example B: Q&A thread with one problem and discussion replies ---
+Thread title: "Ciekawy iloczyn"
+Posts:
+  [0] author: mol_ksiazkowy — "\\text{Udowodnić, że } f(m)= \\frac{2}{3} (-1)^{m+1} m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}"
+  [1] author: azanus111 — "\\text{Ustalmy } m \\text{, niech } f(m)= \\prod_{n \\neq m} \\frac{n-m}{n+m} \\cdot \\prod_{n \\neq m} \\frac{n^2+nm+m^2}{n^2-nm+m^2} \\text{ ...cnd}"
+  [2] author: Jan Kraszewski — "\\text{No cóż, } (-1)^{m-1}=(-1)^{m+1}"
+
+Output:
+[
+  {
+    "question": "\\text{Udowodnić, że } f(m)= \\frac{2}{3} (-1)^{m+1} m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}",
+    "post_indices": [0, 1, 2],
+    "has_inline_solution": false
+  }
+]
+"""
+
+
+def split_tasks(title: str, posts: list[dict]) -> list[dict]:
+    """
+    Returns list of {"question": str, "post_indices": list[int]}.
+    Falls back to treating the whole thread as one task on parse errors.
+    """
+    posts_text = "\n".join(
+        f"  [{p['index']}] author: {p['author']} — {p['content'][:500]}"
+        for p in posts
+    )
+    user_prompt = f"Thread title: {title}\n\nPosts:\n{posts_text}"
+
+    raw = call_llm(SPLIT_SYSTEM, user_prompt)
+    debug("STEP 0 — split_tasks | raw LLM output", raw)
+
+    try:
+        # Strip markdown code fences if present
+        clean = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        tasks = json.loads(clean)
+        if isinstance(tasks, list) and tasks:
+            debug("STEP 0 — split_tasks | parsed tasks", json.dumps(tasks, ensure_ascii=False, indent=2))
+            return tasks
+    except (json.JSONDecodeError, KeyError):
+        debug("STEP 0 — split_tasks | JSON parse failed, using fallback", raw)
+
+    # Fallback: one task = first post as question
+    return [{"question": posts[0]["content"] if posts else title, "post_indices": list(range(len(posts)))}]
+
+
+# ---------------------------------------------------------------------------
+# Step 1 — Filter
+# ---------------------------------------------------------------------------
+
+FILTER_SYSTEM = """\
+You are a filter for a math fine-tuning dataset. Decide whether a math problem \
+should be KEPT or DISCARDED.
+
+Discard if the problem:
+- Requires drawing, constructing, or sketching a figure (e.g. "naszkicuj", "skonstruuj", "narysuj")
+- Is spam, off-topic, or not a math problem at all
+- Is purely a meta-discussion (e.g. asking for a textbook recommendation)
+- Cannot be answered without a visual/image that is attached to the post (contains_images: true
+  AND the content references a figure, table, or drawing)
+- Is only an incomplete fragment with no solvable question
+
+Keep if the problem:
+- Is a well-defined math problem (algebra, calculus, number theory, combinatorics, proofs, etc.)
+- Can be solved using text and LaTeX notation only
+- Is a tutorial post that states worked examples — keep each example as its own task
+
+Respond with exactly two lines:
+DECISION: YES   (or NO)
+REASON: one short sentence
+
+Few-shot examples:
+
+--- Example 1 ---
+Problem: \\text{Oblicz } \\lim_{n \\to \\infty} \\frac{n^2+1}{2n^2-3}
+contains_images in relevant posts: false
+DECISION: YES
+REASON: Standard calculus limit problem, fully solvable in text.
+
+--- Example 2 ---
+Problem: \\text{Skonstruuj trójkąt o bokach 3, 4, 5 używając cyrkla i linijki i narysuj wszystkie wysokości.}
+contains_images in relevant posts: false
+DECISION: NO
+REASON: Requires physical drawing/construction.
+
+--- Example 3 ---
+Problem: \\text{Hej, ktoś może polecić dobry podręcznik do analizy matematycznej?}
+contains_images in relevant posts: false
+DECISION: NO
+REASON: Off-topic meta-discussion, not a math problem.
+
+--- Example 4 ---
+Problem: \\text{Udowodnij, że dla każdej liczby całkowitej } n \\text{, wyrażenie } n^2 + n \\text{ jest parzyste.}
+contains_images in relevant posts: false
+DECISION: YES
+REASON: Proof problem solvable entirely in text.
+
+--- Example 5 ---
+Problem: \\text{Na rysunku poniżej dane są kąty trójkąta. Oblicz pole.}
+contains_images in relevant posts: true
+DECISION: NO
+REASON: Problem depends on an attached image that cannot be read as text.
+"""
+
+
+def filter_question(question: str, relevant_posts: list[dict] | None = None) -> dict:
+    """Returns {"keep": bool, "reason": str}."""
+    has_images = any(p.get("contains_images", False) for p in (relevant_posts or []))
+    user_prompt = (
+        f"Problem: {question[:1000]}\n"
+        f"contains_images in relevant posts: {str(has_images).lower()}"
+    )
+    raw = call_llm(FILTER_SYSTEM, user_prompt)
+    debug("STEP 1 — filter_question | raw LLM output", raw)
+
+    keep = True
+    reason = ""
+    for line in raw.splitlines():
+        line = line.strip()
+        if line.startswith("DECISION:"):
+            keep = "YES" in line.upper()
+        elif line.startswith("REASON:"):
+            reason = line.split(":", 1)[1].strip()
+
+    debug("STEP 1 — filter_question | parsed result", f"keep={keep}  reason={reason}")
+    return {"keep": keep, "reason": reason}
