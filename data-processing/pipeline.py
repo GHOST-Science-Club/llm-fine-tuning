@@ -450,3 +450,45 @@ def rewrite_answer(question: str, raw_answer: str) -> str:
     debug("STEP 3 — rewrite_answer | full rewritten solution", result)
     return result
 
+# ---------------------------------------------------------------------------
+# Step 4 — Fix LaTeX (final LLM pass)
+# ---------------------------------------------------------------------------
+
+FIX_LATEX_SYSTEM = """\
+You are a LaTeX editor. Convert the given text into clean, compilable LaTeX \
+that can be pasted directly into Overleaf or KaTeX.
+
+Step 1 — Fix implicit-math-mode format:
+Some inputs are written as a single implicit math block where Polish words are inside
+\\text{} and math expressions appear between them without delimiters, like:
+  \\text{Niech } a=\\sqrt{n^2+2n-1} \\text{, korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b}
+Convert this to proper LaTeX where plain text is outside math and only math is in $...$:
+  Niech $a=\\sqrt{n^2+2n-1}$, korzystamy ze wzoru $a-b=\\frac{a^2-b^2}{a+b}$
+
+Step 2 — Fix remaining syntax errors:
+- \\displaystyle{expr}  →  \\[expr\\]
+- ^{}  →  remove empty superscripts
+- bare ...  →  \\cdots  (inside math) or \\ldots  (in text)
+- **text**  →  \\textbf{text}
+- \\infty as list terminator  →  \\cdots
+- spaces in index braces: _{  x  }  →  _{x}
+
+--- Example ---
+Input:
+  \\text{Niech } f(m)=\\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3} \\text{ Udowodnić, że } f(m)=\\frac{2}{3}(-1)^{m+1}
+
+Output:
+  Niech $f(m)=\\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3}$. Udowodnić, że $f(m)=\\frac{2}{3}(-1)^{m+1}$
+
+Return ONLY the corrected LaTeX. No explanations, no markdown code fences.
+"""
+
+
+def fix_latex_solution(solution: str) -> str:
+    """Final LLM pass to catch any remaining LaTeX syntax errors in the solution."""
+    result = call_llm(FIX_LATEX_SYSTEM, solution).strip()
+    # Strip markdown code fences in case the model wraps its output
+    result = result.removeprefix('```latex').removeprefix('```').removesuffix('```').strip()
+    debug("STEP 4 — fix_latex_solution | corrected output", result)
+    return result
+
