@@ -23,7 +23,7 @@ import json
 import sys
 from latex_utils import normalize_latex
 from utils import debug
-from stages import split_tasks, filter_question, fix_latex_solution, find_answer, rewrite_answer
+from stages import split_tasks, filter_question, fix_latex_solution, find_answer, rewrite_answer, classify_question
 from pathlib import Path
 from config import INPUT_DIR, OUTPUT_FILE, DEBUG
 
@@ -68,6 +68,8 @@ def process_thread(thread: dict) -> list[dict]:
             "question": question_clean,
             "kept": filt["keep"],
             "filter_reason": filt["reason"],
+            "category": None,
+            "category_reason": None,
             "raw_answer": None,
             "answer_post_index": None,
             "solution": None,
@@ -78,13 +80,27 @@ def process_thread(thread: dict) -> list[dict]:
             results.append(record)
             continue
 
-        print(f"    -> KEPT. Finding answer (inline={has_inline})...")
+        print(f"    -> KEPT. Classifying question...")
+        classification = classify_question(question)
+        category = classification.get("category")
+        category_reason = classification.get("reason")
+
+        if category is None:
+            print(f"    -> Invalid or missing category! Discarding.")
+            results.append(record)
+            continue
+
+        record['category'], record['category_reason'] = category, category_reason
+        print(f"Category found: {category}, reason: {category_reason}")
+
+        print(f"    -> Finding answer (inline={has_inline})...")
         raw_answer, answer_post_idx = find_answer(question, posts, relevant_indices, has_inline)
 
         if raw_answer is None:
             print(f"    -> No answer found in thread")
             results.append(record)
             continue
+
 
         print(f"    -> Cleaning answer LaTeX...")
         record["raw_answer"] = fix_latex_solution(normalize_latex(raw_answer))

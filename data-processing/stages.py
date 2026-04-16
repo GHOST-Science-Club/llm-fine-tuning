@@ -1,10 +1,11 @@
 import json
 from utils import debug, call_llm
-from prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIX_LATEX_SYSTEM, FIND_ANSWER_SYSTEM, REWRITE_SYSTEM
+from prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIX_LATEX_SYSTEM, FIND_ANSWER_SYSTEM, REWRITE_SYSTEM, CLASSIFY_SYSTEM
+from models import Category
+
 # ---------------------------------------------------------------------------
 # Step 0 — Split tasks
 # ---------------------------------------------------------------------------
-
 
 def split_tasks(title: str, posts: list[dict]) -> list[dict]:
     """
@@ -61,11 +62,39 @@ def filter_question(question: str, relevant_posts: list[dict] | None = None) -> 
     return {"keep": keep, "reason": reason}
 
 # ---------------------------------------------------------------------------
-# Step 2 — Find correct answer
+# Step 2 - Assign category to the question based on the solution
+# (exact value, expression, proof, complex)
+# ----------------------------------------------------------------------------
+
+def classify_question(question: str) -> dict:
+    """Returns {"category": Category | None, "reason": str}."""
+    user_prompt = f"Problem: {question[:1000]}"
+    raw = call_llm(CLASSIFY_SYSTEM, user_prompt)
+
+    category_str = ""
+    reason = ""
+
+    for line in raw.splitlines():
+        line = line.strip()
+        if line.startswith("CATEGORY:"):
+            category_str = line.split(":", 1)[1].strip().upper()
+        elif line.startswith("REASON:"):
+            reason = line.split(":", 1)[1].strip()
+
+    try:
+        category = Category(category_str)
+    except ValueError:
+        category = None
+        debug("STEP 2", f"WARNING: Invalid category from LLM: {category_str}")
+
+    return {"category": category, "reason": reason}
+
+# ---------------------------------------------------------------------------
+# Step 3 — Find correct answer
 # ---------------------------------------------------------------------------
 
 def find_answer(question: str, posts: list[dict], relevant_indices: list[int],
-                has_inline_solution: bool = False) -> tuple[str | None, int | None]:
+                has_inline_solution: bool = False,) -> tuple[str | None, int | None]:
     """
     Returns (answer_text, source_post_index), or (None, None) if no answer found.
     has_inline_solution=True hints that the answer may be inside the question post itself.
@@ -118,8 +147,9 @@ def find_answer(question: str, posts: list[dict], relevant_indices: list[int],
     return answer_text, post_index
 
 
+
 # ---------------------------------------------------------------------------
-# Step 3 — Rewrite answer (chain-of-thought)
+# Step 4 — Rewrite answer (chain-of-thought)
 # ---------------------------------------------------------------------------
 
 def rewrite_answer(question: str, raw_answer: str) -> str:
@@ -133,7 +163,7 @@ def rewrite_answer(question: str, raw_answer: str) -> str:
     return result
 
 # ---------------------------------------------------------------------------
-# Step 4 — Fix LaTeX (final LLM pass)
+# Step 5 — Fix LaTeX (final LLM pass)
 # ---------------------------------------------------------------------------
 
 def fix_latex_solution(solution: str) -> str:
@@ -143,3 +173,4 @@ def fix_latex_solution(solution: str) -> str:
     result = result.removeprefix('```latex').removeprefix('```').removesuffix('```').strip()
     debug("STEP 4 — fix_latex_solution | corrected output", result)
     return result
+

@@ -107,6 +107,89 @@ DECISION: NO
 REASON: Problem depends on an attached image that cannot be read as text.
 """
 
+CLASSIFY_SYSTEM = """\
+You are a math problem classifier for an RLHF fine-tuning dataset. Your job is to \
+classify a given math problem into exactly one of four categories based on the expected format \
+of its final answer.
+
+Categories:
+1. EXACT_VALUE
+   - The final answer is a single specific number, a mathematical constant, or a limit value.
+   - e.g., calculating a limit, finding a specific probability, or solving an equation with one distinct numeric root.
+2. EXPRESSION
+   - The final answer is an algebraic expression, a formula, a function, an inequality result, or a set/interval.
+   - e.g., finding a derivative, simplifying a polynomial, solving an inequality.
+3. PROOF
+   - The problem asks to prove, show, justify, or derive a mathematical statement.
+   - Look for Polish keywords: "Udowodnij", "Wykaż", "Uzasadnij", "Pokaż".
+4. COMPLEX
+   - The problem is a descriptive word problem, has multiple sub-questions, or requires multiple distinct numeric answers.
+   - e.g., optimization problems with physical context, or "find the dimensions of...".
+
+Respond with exactly two lines:
+CATEGORY: <EXACT_VALUE | EXPRESSION | PROOF | COMPLEX>
+REASON: one short sentence explaining why
+
+Few-shot examples:
+
+--- Example 1 ---
+Problem: \\text{Oblicz } \\lim_{n \\to \\infty} \\frac{n^2+1}{2n^2-3}
+CATEGORY: EXACT_VALUE
+REASON: The final answer is a single number (1/2).
+
+--- Example 2 ---
+Problem: \\text{Wyznacz pochodną funkcji } f(x) = x^2 \\sin(x)
+CATEGORY: EXPRESSION
+REASON: The answer is an algebraic formula containing variables.
+
+--- Example 3 ---
+Problem: \\text{Udowodnij, że dla każdej liczby całkowitej } n \\text{, wyrażenie } n^2 + n \\text{ jest parzyste.}
+CATEGORY: PROOF
+REASON: The prompt explicitly asks to prove ("Udowodnij") a statement.
+
+--- Example 4 ---
+Problem: \\text{Rozwiąż nierówność: } x^2 - 4 > 0
+CATEGORY: EXPRESSION
+REASON: The answer is an interval/set of values, not a single exact number.
+
+--- Example 5 ---
+Problem: \\text{Rolnik ma 100m bieżących siatki i chce ogrodzić prostokątną działkę o największym polu. Podaj wymiary.}
+CATEGORY: COMPLEX
+REASON: Word problem requiring the extraction of context and returning multiple values (dimensions).
+
+--- Example 6 ---
+Problem: \\text{Rozwiąż równanie } 2x - 8 = 0
+CATEGORY: EXACT_VALUE
+REASON: The solution to this linear equation is a single specific number (x=4).
+"""
+
+REWRITE_SYSTEM = """\
+You are formatting a math forum answer into numbered steps. \
+Your ONLY job is to split the answer into steps and fix LaTeX syntax. \
+Do NOT add, remove, or change any mathematical content.
+
+Rules:
+- Split the answer into numbered steps: "Krok 1:", "Krok 2:", etc.
+- Each step = one logical sentence or one formula from the original
+- Copy all text and formulas EXACTLY — do not paraphrase, do not add explanations
+- Fix LaTeX syntax only: use $...$ for inline math, \\[ ... \\] for display math
+- End with \\textbf{Wynik:} and the final result in \\[ ... \\]
+- If the original has no final numeric result, skip \\textbf{Wynik:}
+
+--- Example ---
+Raw answer:
+  "\\text{Niech } a=\\sqrt{n^2+2n-1} \\text{, } b=n \\text{, korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b} \\text{, liczymy i wychodzi 1}"
+
+Rewritten:
+
+Krok 1: Niech $a=\\sqrt{n^2+2n-1}$, $b=n$, korzystamy ze wzoru $a-b=\\frac{a^2-b^2}{a+b}$.
+
+Krok 2: Liczymy i wychodzi 1.
+
+\\textbf{Wynik:}
+\\[ \\lim_{n \\to \\infty}(\\sqrt{n^2+2n-1}-n) = 1 \\]
+"""
+
 FIND_ANSWER_SYSTEM = """\
 You are reviewing a math forum thread. Given the problem and the list of posts, \
 find the most complete and correct answer.
@@ -139,33 +222,6 @@ Posts:
   [2] Jan Kraszewski (contains_images=False): "\\text{No cóż, } (-1)^{m-1}=(-1)^{m+1}"
 
 POST_INDEX: 1
-"""
-
-REWRITE_SYSTEM = """\
-You are formatting a math forum answer into numbered steps. \
-Your ONLY job is to split the answer into steps and fix LaTeX syntax. \
-Do NOT add, remove, or change any mathematical content.
-
-Rules:
-- Split the answer into numbered steps: "Krok 1:", "Krok 2:", etc.
-- Each step = one logical sentence or one formula from the original
-- Copy all text and formulas EXACTLY — do not paraphrase, do not add explanations
-- Fix LaTeX syntax only: use $...$ for inline math, \\[ ... \\] for display math
-- End with \\textbf{Wynik:} and the final result in \\[ ... \\]
-- If the original has no final numeric result, skip \\textbf{Wynik:}
-
---- Example ---
-Raw answer:
-  "\\text{Niech } a=\\sqrt{n^2+2n-1} \\text{, } b=n \\text{, korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b} \\text{, liczymy i wychodzi 1}"
-
-Rewritten:
-
-Krok 1: Niech $a=\\sqrt{n^2+2n-1}$, $b=n$, korzystamy ze wzoru $a-b=\\frac{a^2-b^2}{a+b}$.
-
-Krok 2: Liczymy i wychodzi 1.
-
-\\textbf{Wynik:}
-\\[ \\lim_{n \\to \\infty}(\\sqrt{n^2+2n-1}-n) = 1 \\]
 """
 
 FIX_LATEX_SYSTEM = """\
