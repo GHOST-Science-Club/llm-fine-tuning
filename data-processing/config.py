@@ -11,3 +11,4 @@ DEBUG = os.getenv("DEBUG", "false") == "true"
 
 INPUT_DIR = Path(__file__).parent / "data" / "input"
 OUTPUT_FILE = Path(__file__).parent / "data" / "output" / "pipeline_output.jsonl"
+DATASET_FILE = Path(__file__).parent / "data" / "dataset" / "pipeline_output.jsonl"

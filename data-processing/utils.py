@@ -1,5 +1,8 @@
+from typing import Optional
+from pathlib import Path
 import requests
 from config import  API_KEY, MODEL, BASE_URL, DEBUG
+from datasets import load_dataset
 
 def call_llm(system_prompt: str, user_prompt: str) -> str:
     """
@@ -42,3 +45,23 @@ def debug(stage: str, content: str) -> None:
     print(sep)
     print(content)
     print(sep)
+
+
+def save_dataset(
+    input_file_path: str | Path,
+    output_path: Optional[str | Path] = None,
+    repo_id: Optional[str] = None
+) -> None:
+    """Saves as hugging face dataset, optionally sets to HF Hub"""
+    input_str = str(input_file_path)
+
+    dataset = load_dataset("json", data_files=input_str, split="train")
+
+    if output_path:
+        dataset.save_to_disk(output_path)
+        print(f"Dataset saved locally successfully in: {output_path}")
+
+    if repo_id:
+         dataset.push_to_hub(repo_id)
+         print(f"Dataset saved successfully in HF Hub: {repo_id}")
+

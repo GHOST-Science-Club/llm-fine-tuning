@@ -22,10 +22,10 @@ import glob
 import json
 import sys
 from latex_utils import normalize_latex
-from utils import debug
+from utils import debug, save_dataset
 from stages import split_tasks, filter_question, fix_latex_solution, find_answer, rewrite_answer, classify_question
 from pathlib import Path
-from config import INPUT_DIR, OUTPUT_FILE, DEBUG
+from config import INPUT_DIR, OUTPUT_FILE, DEBUG, DATASET_FILE
 
 # ---------------------------------------------------------------------------
 # Main pipeline
@@ -151,6 +151,7 @@ def main():
 
     print(f"\nDone. Results saved to {OUTPUT_FILE}")
 
+    save_dataset(str(OUTPUT_FILE), str(DATASET_FILE))
 
 if __name__ == "__main__":
     main()

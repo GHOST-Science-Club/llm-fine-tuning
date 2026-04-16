@@ -173,4 +173,3 @@ def fix_latex_solution(solution: str) -> str:
     result = result.removeprefix('```latex').removeprefix('```').removesuffix('```').strip()
     debug("STEP 4 — fix_latex_solution | corrected output", result)
     return result
-
