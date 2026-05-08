@@ -1,0 +1,68 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "json",
+  "dataset_size": 2635,
+  "description": "",
+  "download_size": 2901,
+  "features": {
+    "source_url": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "source_title": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "question": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "kept": {
+      "dtype": "bool",
+      "_type": "Value"
+    },
+    "filter_reason": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "category": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "category_reason": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "raw_answer": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "answer_post_index": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "solution": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 5536,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 2635,
+      "num_examples": 1,
+      "dataset_name": "json"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

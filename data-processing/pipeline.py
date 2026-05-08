@@ -1,8 +1,8 @@
-from pathlib import Path
-from models import DataProcessingPipeline
+from .models import DataProcessingPipeline
+from .config import INPUT_FILE, OUTPUT_FILE, DATASET_FILE
 
 def main():
-    pipeline = DataProcessingPipeline(Path("./data/input/forum_example_fixed.jsonl"), Path("./data/output"), Path("./data/dataset/processed"))
+    pipeline = DataProcessingPipeline(INPUT_FILE, OUTPUT_FILE, DATASET_FILE)
     pipeline.run()
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 import json
 from enum import Enum
 from pathlib import Path
-from utils import debug, call_llm, save_dataset
-from prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM
-from latex_utils import normalize_latex
+from .utils import debug, call_llm, save_dataset
+from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM
+from .latex_utils import normalize_latex
 
 class Category(str, Enum):
     EXACT_VALUE = "EXACT_VALUE"

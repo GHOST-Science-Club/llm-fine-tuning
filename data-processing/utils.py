@@ -1,7 +1,7 @@
 from typing import Optional
 from pathlib import Path
 import requests
-from config import  API_KEY, MODEL, BASE_URL, DEBUG
+from .config import  API_KEY, MODEL, BASE_URL, DEBUG
 from datasets import load_dataset
 
 def call_llm(system_prompt: str, user_prompt: str) -> str:
@@ -9,6 +9,7 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
     Call the LLM API (OpenAI-compatible).
     Swap BASE_URL / auth headers here when moving to PCSS.
     """
+
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
@@ -31,7 +32,6 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
     if DEBUG and response.status_code != 200:
         print(f"\n[API ERROR] Payload: {payload}")
         print(f"[API ERROR] Server response: {response.text}")
-
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"].strip()
 
