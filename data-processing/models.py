@@ -13,10 +13,11 @@ class Category(str, Enum):
 
 class DataProcessingPipeline:
 
-    def __init__(self, input_file: Path, output_dir: Path, dataset_dir: Path):
+    def __init__(self, input_file: Path, output_file: Path, dataset_dir: Path, checkpoint_file: Path):
         self.input_file = input_file
-        self.output_dir = output_dir
+        self.output_file = output_file
         self.dataset_dir = dataset_dir
+        self.checkpoint_file = checkpoint_file
         self.raw_data = []
         self.processed_data = []
         self.stats = {
@@ -209,15 +210,28 @@ class DataProcessingPipeline:
         # 1. Load the raw data into self.raw_data
         self._load_data()
 
-        # Define the output file path
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        output_file = self.output_dir / "pipeline_output.jsonl"
 
-        print(f"\nStarting to process {len(self.raw_data)} threads...")
+        start_thread_idx, start_task_idx = 0, 0
+        if self.checkpoint_file.is_file():
+            try:
+                with open(self.checkpoint_file, "r", encoding="utf-8") as checkpoint_f:
+                    start_thread_idx, start_task_idx = checkpoint_f.read().strip().split(":")
+                    start_thread_idx, start_task_idx = int(start_thread_idx), int(start_task_idx)
+            except Exception as e:
+                print("Warning! Checkpoint could not have been found!")
+
+        # append mode if starting from checkpoint
+        file_mode = "a" if start_thread_idx > 0 or start_task_idx > 0 else "w"
+
+        start_thread_idx = max(0, start_thread_idx)
+        start_task_idx = max(0, start_task_idx)
+
+        print(f"\nStarting to process {len(self.raw_data) - start_thread_idx} threads...")
+        print(f"\nStarting from the {start_thread_idx} index")
 
         # We open the file in write mode to stream results as they are ready
-        with open(output_file, "w", encoding="utf-8") as out_f:
-            for thread_idx, thread in enumerate(self.raw_data, start=1):
+        with open(self.output_file, file_mode, encoding="utf-8") as out_f:
+            for thread_idx, thread in enumerate(self.raw_data[start_thread_idx:], start=start_thread_idx):
                 print(f"\n--- Thread {thread_idx}/{len(self.raw_data)} ---")
 
                 title = thread.get("title", "")
@@ -235,8 +249,12 @@ class DataProcessingPipeline:
                 print(f"  Found {len(tasks)} task(s)")
 
                 for i, task in enumerate(tasks):
-                    print(f"  Task {i + 1}/{len(tasks)}: filtering...")
 
+                    if thread_idx == start_thread_idx and i < start_task_idx:
+                        print(f"  Task {i + 1}/{len(tasks)}: I'm skipping (already done)...")
+                        continue
+
+                    print(f"  Task {i + 1}/{len(tasks)}: filtering...")
                     question = normalize_latex(task["question"])
                     relevant_indices = task.get("post_indices", list(range(len(posts))))
                     has_inline = task.get("has_inline_solution", False)
@@ -267,56 +285,66 @@ class DataProcessingPipeline:
                         self.stats["filtered_out"] += 1
                         self.processed_data.append(record)
                         out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
-                        continue
+                    else:
+                        print("    -> KEPT. Classifying question...")
+                        classification = self._classify_question(question)
+                        category = classification.get("category")
 
-                    print("    -> KEPT. Classifying question...")
-                    classification = self._classify_question(question)
-                    category = classification.get("category")
+                        # Step B: Category check
+                        if category is None:
+                            print("    -> Invalid or missing category! Discarding.")
+                            self.stats["filtered_out"] += 1
+                            self.processed_data.append(record)
+                            out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                        else:
+                            # Unpack enum to string safely
+                            record["category"] = category.value if isinstance(category, Category) else category
+                            record["category_reason"] = classification.get("reason")
+                            print(f"    -> Category found: {record['category']}, reason: {record['category_reason']}")
 
-                    # Step B: Category check
-                    if category is None:
-                        print("    -> Invalid or missing category! Discarding.")
-                        self.stats["filtered_out"] += 1
-                        self.processed_data.append(record)
-                        out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
-                        continue
+                            print(f"    -> Finding answer (inline={has_inline})...")
+                            raw_answer, answer_post_idx = self._find_correct_answer(
+                                question, posts, relevant_indices, has_inline
+                            )
 
-                    # Unpack enum to string safely
-                    record["category"] = category.value if isinstance(category, Category) else category
-                    record["category_reason"] = classification.get("reason")
-                    print(f"    -> Category found: {record['category']}, reason: {record['category_reason']}")
+                            # Step C: Answer check
+                            if raw_answer is None:
+                                print("    -> No answer found in thread. Discarding.")
+                                self.stats["filtered_out"] += 1
+                                self.processed_data.append(record)
+                                out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                            else:
+                                print("    -> Cleaning answer LaTeX...")
+                                record["raw_answer"] = self._fix_latex_solution(normalize_latex(raw_answer))
+                                record["answer_post_index"] = answer_post_idx
 
-                    print(f"    -> Finding answer (inline={has_inline})...")
-                    raw_answer, answer_post_idx = self._find_correct_answer(
-                        question, posts, relevant_indices, has_inline
-                    )
+                                print("    -> Rewriting answer...")
+                                solution = self._rewrite_answer(question_clean, raw_answer)
 
-                    # Step C: Answer check
-                    if raw_answer is None:
-                        print("    -> No answer found in thread. Discarding.")
-                        self.stats["filtered_out"] += 1
-                        self.processed_data.append(record)
-                        out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
-                        continue
+                                print("    -> Fixing solution LaTeX...")
+                                record["solution"] = self._fix_latex_solution(solution)
 
-                    print("    -> Cleaning answer LaTeX...")
-                    record["raw_answer"] = self._fix_latex_solution(normalize_latex(raw_answer))
-                    record["answer_post_index"] = answer_post_idx
+                                print("    -> SUCCESS! Task fully processed and kept.")
+                                self.stats["kept"] += 1
+                                self.processed_data.append(record)
 
-                    print("    -> Rewriting answer...")
-                    solution = self._rewrite_answer(question_clean, raw_answer)
+                                # Write final successful record to file
+                                out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-                    print("    -> Fixing solution LaTeX...")
-                    record["solution"] = self._fix_latex_solution(solution)
+                    try:
+                        with open(self.checkpoint_file, "w", encoding="utf-8") as checkpoint_f:
+                            checkpoint_f.write(f"{thread_idx}:{i+1}")
+                    except Exception as e:
+                        print("Warning! Checkpoint could not have been saved!")
 
-                    print("    -> SUCCESS! Task fully processed and kept.")
-                    self.stats["kept"] += 1
-                    self.processed_data.append(record)
-
-                    # Write final successful record to file
-                    out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                start_task_idx = 0
+                try:
+                    with open(self.checkpoint_file, "w", encoding="utf-8") as checkpoint_f:
+                        checkpoint_f.write(f"{thread_idx + 1}:0")
+                except Exception as e:
+                    print("Warning! Checkpoint could not have been saved!")
 
         print("\n=== PIPELINE FINISHED ===")
-        print(f"Results saved to: {output_file}")
+        print(f"Results saved to: {self.output_file}")
         print("Pipeline Statistics:", json.dumps(self.stats, indent=2))
-        save_dataset(output_file, self.dataset_dir)
+        save_dataset(self.output_file, self.dataset_dir)

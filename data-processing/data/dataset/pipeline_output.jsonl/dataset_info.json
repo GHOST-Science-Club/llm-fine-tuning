@@ -3,9 +3,9 @@
   "citation": "",
   "config_name": "default",
   "dataset_name": "json",
-  "dataset_size": 2635,
+  "dataset_size": 2729,
   "description": "",
-  "download_size": 2901,
+  "download_size": 3023,
   "features": {
     "source_url": {
       "dtype": "string",
@@ -50,11 +50,11 @@
   },
   "homepage": "",
   "license": "",
-  "size_in_bytes": 5536,
+  "size_in_bytes": 5752,
   "splits": {
     "train": {
       "name": "train",
-      "num_bytes": 2635,
+      "num_bytes": 2729,
       "num_examples": 1,
       "dataset_name": "json"
     }
