@@ -1,3 +1,6 @@
+math-verify
+torch
+lm-eval
 datasets
 requests==2.32.3
 python-dotenv==1.0.1
