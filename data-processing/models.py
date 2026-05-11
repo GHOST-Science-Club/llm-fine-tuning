@@ -1,6 +1,5 @@
 import json
 from enum import Enum
-from logging import exception
 from pathlib import Path
 from .utils import debug, call_llm, save_dataset
 from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM
@@ -14,13 +13,14 @@ class Category(str, Enum):
 
 class DataProcessingPipeline:
 
-    def __init__(self, input_file: Path, output_file: Path, dataset_dir: Path, checkpoint_file: Path):
+    def __init__(self, input_file: Path, output_file: Path, dataset_dir: Path, checkpoint_file: Path, quiet: bool = False):
         self.input_file = input_file
         self.output_file = output_file
         self.dataset_dir = dataset_dir
         self.checkpoint_file = checkpoint_file
         self.raw_data = []
         self.processed_data = []
+        self.quiet = quiet
         self.stats = {
             "loaded": 0,
             "filtered_out": 0,
@@ -226,14 +226,15 @@ class DataProcessingPipeline:
 
         start_thread_idx = max(0, start_thread_idx)
         start_task_idx = max(0, start_task_idx)
-
-        print(f"\nStarting to process {len(self.raw_data) - start_thread_idx} threads...")
-        print(f"\nStarting from the {start_thread_idx} index")
+        if not self.quiet:
+            print(f"\nStarting to process {len(self.raw_data) - start_thread_idx} threads...")
+            print(f"\nStarting from the {start_thread_idx} index")
 
         # We open the file in write mode to stream results as they are ready
         with open(self.output_file, file_mode, encoding="utf-8") as out_f:
             for thread_idx, thread in enumerate(self.raw_data[start_thread_idx:], start=start_thread_idx):
-                print(f"\n--- Thread {thread_idx}/{len(self.raw_data)} ---")
+                if not self.quiet:
+                    print(f"\n--- Thread {thread_idx}/{len(self.raw_data)} ---")
 
                 title = thread.get("title", "")
                 url = thread.get("url", "")
@@ -245,9 +246,11 @@ class DataProcessingPipeline:
                     for p in posts
                 ]
                 try:
-                    print("  Splitting tasks...")
+                    if not self.quiet:
+                        print("  Splitting tasks...")
                     tasks = self._split_tasks(title, posts)
-                    print(f"  Found {len(tasks)} task(s)")
+                    if not self.quiet:
+                        print(f"  Found {len(tasks)} task(s)")
                 except Exception as e:
                     print(f"Error while splitting tasks! {e}")
                     continue
@@ -255,10 +258,11 @@ class DataProcessingPipeline:
                 for i, task in enumerate(tasks):
 
                     if thread_idx == start_thread_idx and i < start_task_idx:
-                        print(f"  Task {i + 1}/{len(tasks)}: I'm skipping (already done)...")
+                        if not self.quiet:
+                            print(f"  Task {i + 1}/{len(tasks)}: I'm skipping (already done)...")
                         continue
-
-                    print(f"  Task {i + 1}/{len(tasks)}: filtering...")
+                    if not self.quiet:
+                        print(f"  Task {i + 1}/{len(tasks)}: filtering...")
                     try:
                         question = normalize_latex(task["question"])
                         relevant_indices = task.get("post_indices", list(range(len(posts))))
@@ -274,7 +278,8 @@ class DataProcessingPipeline:
                         print(f"Error while filtering questions! {e}")
                         continue
                     try:
-                        print("    -> Cleaning question LaTeX...")
+                        if not self.quiet:
+                            print("    -> Cleaning question LaTeX...")
                         question_clean = self._fix_latex_solution(question)
                     except Exception as e:
                         print(f"Error while cleaning question! {e}")
@@ -296,13 +301,15 @@ class DataProcessingPipeline:
 
                     # Step A: Filter check
                     if not filt["keep"]:
-                        print(f"    -> DISCARDED: {filt['reason']}")
+                        if not self.quiet:
+                            print(f"    -> DISCARDED: {filt['reason']}")
                         self.stats["filtered_out"] += 1
                         self.processed_data.append(record)
                         out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                     else:
                         try:
-                            print("    -> KEPT. Classifying question...")
+                            if not self.quiet:
+                                print("    -> KEPT. Classifying question...")
                             classification = self._classify_question(question)
                             category = classification.get("category", None)
                         except Exception as e:
@@ -312,7 +319,8 @@ class DataProcessingPipeline:
 
                         # Step B: Category check
                         if category is None:
-                            print("    -> Invalid or missing category! Discarding.")
+                            if not self.quiet:
+                                print("    -> Invalid or missing category! Discarding.")
                             self.stats["filtered_out"] += 1
                             self.processed_data.append(record)
                             out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -320,9 +328,11 @@ class DataProcessingPipeline:
                             # Unpack enum to string safely
                             record["category"] = category.value if isinstance(category, Category) else category
                             record["category_reason"] = classification.get("reason")
-                            print(f"    -> Category found: {record['category']}, reason: {record['category_reason']}")
+                            if not self.quiet:
+                                print(f"    -> Category found: {record['category']}, reason: {record['category_reason']}")
                             try:
-                                print(f"    -> Finding answer (inline={has_inline})...")
+                                if not self.quiet:
+                                    print(f"    -> Finding answer (inline={has_inline})...")
                                 raw_answer, answer_post_idx = self._find_correct_answer(
                                     question, posts, relevant_indices, has_inline
                                 )
@@ -334,26 +344,28 @@ class DataProcessingPipeline:
 
                             # Step C: Answer check
                             if raw_answer is None:
-                                print("    -> No answer found in thread. Discarding.")
+                                if not self.quiet:
+                                    print("    -> No answer found in thread. Discarding.")
                                 self.stats["filtered_out"] += 1
                                 self.processed_data.append(record)
                                 out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                             else:
                                 try:
-                                    print("    -> Cleaning answer LaTeX...")
+                                    if not self.quiet:
+                                        print("    -> Cleaning answer LaTeX...")
                                     record["raw_answer"] = self._fix_latex_solution(normalize_latex(raw_answer))
                                     record["answer_post_index"] = answer_post_idx
 
-
-                                    print("    -> Rewriting answer...")
+                                    if not self.quiet:
+                                        print("    -> Rewriting answer...")
                                     solution = self._rewrite_answer(question_clean, raw_answer)
 
-
-                                    print("    -> Fixing solution LaTeX...")
+                                    if not self.quiet:
+                                        print("    -> Fixing solution LaTeX...")
                                     record["solution"] = self._fix_latex_solution(solution)
 
-
-                                    print("    -> SUCCESS! Task fully processed and kept.")
+                                    if not self.quiet:
+                                        print("    -> SUCCESS! Task fully processed and kept.")
                                     self.stats["kept"] += 1
                                     self.processed_data.append(record)
 
