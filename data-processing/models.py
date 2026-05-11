@@ -19,7 +19,6 @@ class DataProcessingPipeline:
         self.dataset_dir = dataset_dir
         self.checkpoint_file = checkpoint_file
         self.raw_data = []
-        self.processed_data = []
         self.quiet = quiet
         self.stats = {
             "loaded": 0,
@@ -304,7 +303,6 @@ class DataProcessingPipeline:
                         if not self.quiet:
                             print(f"    -> DISCARDED: {filt['reason']}")
                         self.stats["filtered_out"] += 1
-                        self.processed_data.append(record)
                         out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                     else:
                         try:
@@ -322,7 +320,6 @@ class DataProcessingPipeline:
                             if not self.quiet:
                                 print("    -> Invalid or missing category! Discarding.")
                             self.stats["filtered_out"] += 1
-                            self.processed_data.append(record)
                             out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                         else:
                             # Unpack enum to string safely
@@ -347,7 +344,6 @@ class DataProcessingPipeline:
                                 if not self.quiet:
                                     print("    -> No answer found in thread. Discarding.")
                                 self.stats["filtered_out"] += 1
-                                self.processed_data.append(record)
                                 out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                             else:
                                 try:
@@ -367,7 +363,6 @@ class DataProcessingPipeline:
                                     if not self.quiet:
                                         print("    -> SUCCESS! Task fully processed and kept.")
                                     self.stats["kept"] += 1
-                                    self.processed_data.append(record)
 
                                     # Write final successful record to file
                                     out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
