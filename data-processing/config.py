@@ -19,5 +19,5 @@ OUTPUT_FILE = DATA_DIR / "output" / "pipeline_output.jsonl"
 DATASET_FILE = DATA_DIR / "dataset" / "pipeline_output.jsonl"
 CHECKPOINT_FILE = DATA_DIR / "checkpoint" / "checkpoint.txt"
 
-for path in [OUTPUT_FILE.parent, DATASET_FILE.parent, INPUT_FILE.parent]:
+for path in [OUTPUT_FILE.parent, DATASET_FILE.parent, INPUT_FILE.parent, CHECKPOINT_FILE.parent]:
     path.mkdir(parents=True, exist_ok=True)
