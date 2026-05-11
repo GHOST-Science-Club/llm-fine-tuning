@@ -1,5 +1,6 @@
 import json
 from enum import Enum
+from logging import exception
 from pathlib import Path
 from .utils import debug, call_llm, save_dataset
 from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM
@@ -243,10 +244,13 @@ class DataProcessingPipeline:
                     {**p, "content": normalize_latex(p.get("content", ""))}
                     for p in posts
                 ]
-
-                print("  Splitting tasks...")
-                tasks = self._split_tasks(title, posts)
-                print(f"  Found {len(tasks)} task(s)")
+                try:
+                    print("  Splitting tasks...")
+                    tasks = self._split_tasks(title, posts)
+                    print(f"  Found {len(tasks)} task(s)")
+                except Exception as e:
+                    print(f"Error while splitting tasks! {e}")
+                    continue
 
                 for i, task in enumerate(tasks):
 
@@ -255,15 +259,26 @@ class DataProcessingPipeline:
                         continue
 
                     print(f"  Task {i + 1}/{len(tasks)}: filtering...")
-                    question = normalize_latex(task["question"])
-                    relevant_indices = task.get("post_indices", list(range(len(posts))))
-                    has_inline = task.get("has_inline_solution", False)
+                    try:
+                        question = normalize_latex(task["question"])
+                        relevant_indices = task.get("post_indices", list(range(len(posts))))
+                        has_inline = task.get("has_inline_solution", False)
+                    except (KeyError, TypeError, AttributeError) as e:
+                        print(f"    -> DISCARDED: Distorted task structure from LLM. Skipping... ({e})")
+                        self.stats["llm_parse_errors"] = self.stats.get("llm_parse_errors", 0) + 1
+                        continue
                     relevant_posts = [p for p in posts if p["index"] in relevant_indices]
-
-                    filt = self._filter_question(question, relevant_posts)
-
-                    print("    -> Cleaning question LaTeX...")
-                    question_clean = self._fix_latex_solution(question)
+                    try:
+                        filt = self._filter_question(question, relevant_posts)
+                    except Exception as e:
+                        print(f"Error while filtering questions! {e}")
+                        continue
+                    try:
+                        print("    -> Cleaning question LaTeX...")
+                        question_clean = self._fix_latex_solution(question)
+                    except Exception as e:
+                        print(f"Error while cleaning question! {e}")
+                        continue
 
                     # Initialize the record
                     record = {
@@ -286,9 +301,14 @@ class DataProcessingPipeline:
                         self.processed_data.append(record)
                         out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                     else:
-                        print("    -> KEPT. Classifying question...")
-                        classification = self._classify_question(question)
-                        category = classification.get("category")
+                        try:
+                            print("    -> KEPT. Classifying question...")
+                            classification = self._classify_question(question)
+                            category = classification.get("category", None)
+                        except Exception as e:
+                            print(f"Error while classifying question! {e}")
+                            self.stats["classification_errors"] += 1
+                            category = None
 
                         # Step B: Category check
                         if category is None:
@@ -301,11 +321,16 @@ class DataProcessingPipeline:
                             record["category"] = category.value if isinstance(category, Category) else category
                             record["category_reason"] = classification.get("reason")
                             print(f"    -> Category found: {record['category']}, reason: {record['category_reason']}")
+                            try:
+                                print(f"    -> Finding answer (inline={has_inline})...")
+                                raw_answer, answer_post_idx = self._find_correct_answer(
+                                    question, posts, relevant_indices, has_inline
+                                )
+                            except Exception as e:
+                                print(f"Error while looking for correct answer! {e}")
+                                raw_answer = None
+                                answer_post_idx = None
 
-                            print(f"    -> Finding answer (inline={has_inline})...")
-                            raw_answer, answer_post_idx = self._find_correct_answer(
-                                question, posts, relevant_indices, has_inline
-                            )
 
                             # Step C: Answer check
                             if raw_answer is None:
@@ -314,22 +339,28 @@ class DataProcessingPipeline:
                                 self.processed_data.append(record)
                                 out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                             else:
-                                print("    -> Cleaning answer LaTeX...")
-                                record["raw_answer"] = self._fix_latex_solution(normalize_latex(raw_answer))
-                                record["answer_post_index"] = answer_post_idx
+                                try:
+                                    print("    -> Cleaning answer LaTeX...")
+                                    record["raw_answer"] = self._fix_latex_solution(normalize_latex(raw_answer))
+                                    record["answer_post_index"] = answer_post_idx
 
-                                print("    -> Rewriting answer...")
-                                solution = self._rewrite_answer(question_clean, raw_answer)
 
-                                print("    -> Fixing solution LaTeX...")
-                                record["solution"] = self._fix_latex_solution(solution)
+                                    print("    -> Rewriting answer...")
+                                    solution = self._rewrite_answer(question_clean, raw_answer)
 
-                                print("    -> SUCCESS! Task fully processed and kept.")
-                                self.stats["kept"] += 1
-                                self.processed_data.append(record)
 
-                                # Write final successful record to file
-                                out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                                    print("    -> Fixing solution LaTeX...")
+                                    record["solution"] = self._fix_latex_solution(solution)
+
+
+                                    print("    -> SUCCESS! Task fully processed and kept.")
+                                    self.stats["kept"] += 1
+                                    self.processed_data.append(record)
+
+                                    # Write final successful record to file
+                                    out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                                except Exception as e:
+                                    print(f"Error during final rewriting/cleaning steps! {e}")
 
                     try:
                         with open(self.checkpoint_file, "w", encoding="utf-8") as checkpoint_f:
@@ -341,8 +372,8 @@ class DataProcessingPipeline:
                 try:
                     with open(self.checkpoint_file, "w", encoding="utf-8") as checkpoint_f:
                         checkpoint_f.write(f"{thread_idx + 1}:0")
-                except Exception as e:
-                    print("Warning! Checkpoint could not have been saved!")
+                except FileNotFoundError:
+                    print("Warning! Checkpoint could not have been found!")
 
         print("\n=== PIPELINE FINISHED ===")
         print(f"Results saved to: {self.output_file}")
