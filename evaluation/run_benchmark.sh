@@ -33,8 +33,8 @@ if [ ! -d "$PROJECT/venv" ]; then
 
     echo "Installing libraries (this may take a few minutes)..."
     pip install --upgrade pip
-    pip install torch --index-url https://download.pytorch.org/whl/cu121
-    pip install lm_eval "math-verify[antlr4_13_2]" transformers accelerate
+    pip install -r requirements.txt
+
     echo "Installation complete."
 else
     echo "venv environment already exists. Activating..."
