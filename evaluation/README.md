@@ -33,16 +33,37 @@ Token will be saved to `$PROJECT_PATH/hf_cache/token` and reused automatically b
 
 ---
 
+## Copying Files to the Cluster
+
+From your local machine:
+
+```bash
+cd /mnt/e/Projects/Pycharm/llm-fine-tuning/evaluation  # (Your local project directory)
+scp -i ~/.ssh/id_YOUR_ID -r ./* username@eagle.man.poznan.pl:/mnt/storage_6/project_data/YOUR_GRANT/evaluation```
+```
+
+---
+
+## Running the Setup
+
+If you want to run that evaluation for first time, you have to install dependencies.
+Navigate to the evaluation directory and run setup.sh script, which installs those dependencies and creates virtual environment for you.
+
+```bash
+cd $PROJECT_PATH/evaluation
+bash setup.sh
+```
+---
+
 ## Running the Evaluation
 
 Navigate to the evaluation directory and submit the job:
 
 ```bash
-cd $PROJECT_PATH/llm-fine-tuning/evaluation
+cd $PROJECT_PATH/evaluation
 sbatch run_benchmark.sh
 ```
 
-On first run, the script automatically creates a virtual environment and installs all dependencies. Subsequent runs reuse the existing venv and cached model.
 
 ---
 
@@ -53,10 +74,10 @@ On first run, the script automatically creates a virtual environment and install
 squeue -u $USER
 
 # Follow logs in real time (replace JOBID with your job number)
-tail -f logs_JOBID.out
+tail -f logs/JOBID.out
 
 # Check errors
-cat logs_JOBID.err
+cat logs/JOBID.err
 ```
 
 ---
@@ -65,13 +86,14 @@ cat logs_JOBID.err
 
 ```
 $PROJECT_PATH/
-├── llm-fine-tuning/
-│   └── evaluation/
-│       ├── run_benchmark.sh       # SLURM job script — submit this
+├── evaluation/
+│       ├── run_benchmark.sh       # SLURM job script
+│       ├── setup.sh               # Script for installing dependencies and creating virtual environment
 │       ├── run_eval.py            # Evaluation entry point
 │       ├── benchmark.yaml         # lm_eval task config
 │       ├── benchmark.jsonl        # Math benchmark dataset
-│       └── math_verify_metric.py  # Custom LaTeX answer metric
+│       ├── math_verify_metric.py  # Custom LaTeX answer metric
+│       └── requirements.txt       # List of dependencies
 ├── hf_cache/                      # HuggingFace model cache
 ├── pip_cache/                     # pip cache
 └── venv/                          # Python virtual environment
@@ -79,26 +101,17 @@ $PROJECT_PATH/
 
 ---
 
-## Copying Files to the Cluster
 
-From your local machine:
-
-```bash
-rsync -avz --progress \
-  -e "ssh -i ~/.ssh/id_ed25519" \
-  ./evaluation/ \
-  youruser@eagle.man.poznan.pl:$PROJECT_PATH/llm-fine-tuning/evaluation/
-```
-
----
 
 ## Troubleshooting
 
 **Job pending (`PD`)** — normal, waiting for a free GPU. Check with `squeue -u $USER`.
 
-**`ModuleNotFoundError: No module named 'lm_eval'`** — venv is broken, delete and resubmit:
+**`ModuleNotFoundError: No module named 'lm_eval'`** — venv is broken, delete it and reinstall:
 ```bash
 rm -rf $PROJECT_PATH/venv
+cd $PROJECT_PATH/evaluation
+bash setup.sh
 sbatch run_benchmark.sh
 ```
 
