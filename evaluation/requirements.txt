@@ -1,7 +1,9 @@
---extra-index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://download.pytorch.org/whl/cu118
 
-torch
-lm_eval
+torch==2.3.0+cu118
+transformers<5.0.0
+lm_eval==0.4.5
 math-verify[antlr4_13_2]
-transformers
 accelerate
+sentencepiece
+protobuf
