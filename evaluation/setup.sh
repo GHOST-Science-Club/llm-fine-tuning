@@ -9,6 +9,7 @@ export PIP_CACHE_DIR="$PROJECT/pip_cache"
 
 mkdir -p "$TMPDIR"
 mkdir -p "$PIP_CACHE_DIR"
+mkdir -p "$EVALUATION/logs"
 
 
 echo "Starting setup in directory: $PWD"

@@ -1,13 +1,11 @@
 import sys
 import os
-from os import mkdir
-from pathlib import Path
+import json
 
 eval_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, eval_dir)
 os.chdir(eval_dir)
 
-import math_verify_metric
 import lm_eval
 import torch
 from lm_eval.utils import make_table
@@ -16,13 +14,6 @@ from lm_eval.tasks import TaskManager
 if __name__ == "__main__":
     device_to_use = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Running evaluation on: {device_to_use}")
-
-
-    MODULE_DIR = Path(__file__).resolve().parents[0]
-    LOGS_DIR = MODULE_DIR / "logs"
-
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-
 
     task_manager = TaskManager(include_path=eval_dir)
 
@@ -38,7 +29,6 @@ if __name__ == "__main__":
         fewshot_as_multiturn=True
     )
 
-    import json
     with open("logs/predictions.json", "w", encoding="utf-8") as f:
         json.dump(results["samples"], f, ensure_ascii=False, indent=2)
 
