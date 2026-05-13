@@ -19,6 +19,13 @@ EVALUATION="$PROJECT/evaluation"
 export HF_HOME="$PROJECT/hf_cache"
 mkdir -p "$HF_HOME"
 
+if [ -f "$EVALUATION/.env" ]; then
+    echo "Loading environment variables from .env file..."
+    export $(grep '^HF_TOKEN=' "$EVALUATION/.env" | xargs)
+else
+    echo "WARNING: .env file not found. If the model is gated, it will fail."
+fi
+
 if [ ! -d "$PROJECT/venv" ]; then
     echo "ERROR: venv environment does not exist."
     echo "Please run setup.sh manually on the login node before submitting this job."

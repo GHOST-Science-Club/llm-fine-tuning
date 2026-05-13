@@ -21,15 +21,14 @@ The Bielik model is gated — you need a HuggingFace account with access granted
 
 1. Request access at: https://huggingface.co/speakleash/Bielik-11B-v3.0-Instruct
 2. Generate a read token at: https://huggingface.co/settings/tokens
-3. On the cluster, activate the venv and log in:
+3. Create a `.env` file in the `evaluation` directory and paste your token.
+4. You can do it manually or use command given below.
 
 ```bash
-source $PROJECT_PATH/venv/bin/activate
-export HF_HOME="$PROJECT_PATH/hf_cache"
-hf auth login
+echo 'HF_TOKEN="your_hf_token_here"' > $PROJECT_PATH/evaluation/.env
 ```
 
-Token will be saved to `$PROJECT_PATH/hf_cache/token` and reused automatically by all subsequent jobs.
+Token will be saved to `$PROJECT_PATH/evaluation/.env` and reused automatically by all subsequent jobs.
 
 ---
 
