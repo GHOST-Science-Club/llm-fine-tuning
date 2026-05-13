@@ -1,7 +1,5 @@
 from math_verify import parse, verify
 from lm_eval.api.registry import register_aggregation, register_metric
-from lm_eval.api.registry import register_metric
-
 
 @register_aggregation("math_verify_metric")
 def evaluate(items):
