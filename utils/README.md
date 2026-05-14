@@ -123,11 +123,11 @@ Number of MinHash values that must **all** match within one LSH band for a pair 
 - Lower (1–2): very sensitive — any small overlap triggers deduplication
 - Higher (6–8): conservative — requires most of the document to be identical
 
-### `--num-buckets` (default: 1)
+### `--num-buckets` (default: 14)
 Number of independent LSH bands. A document pair is flagged if it matches in **at least one** band.
 
 - More buckets: better recall at the same `hashes-per-bucket` threshold
-- See note on Windows below
+- Must be a divisor of `--tasks`
 
 ### Quick reference
 
@@ -152,14 +152,14 @@ remember to remove folder with deduplicated data before running script
 
 ---
 
-## Note on `--tasks` and `--num-buckets` (Windows vs Linux)
+## Note on `--tasks` and `--num-buckets`
 
-MinHash stage 2 requires `--tasks` to be divisible by `--num-buckets`. On **Windows**, multiprocessing is limited so both must stay at `1` (the default).
+MinHash stage 2 requires `--tasks` to be divisible by `--num-buckets`. The script uses `start_method="spawn"` which works on both **Windows and Linux**, so multiple tasks are supported on all platforms.
 
-On **Linux** (e.g. a training server), enable full parallelism:
+Default is `--tasks 14 --num-buckets 14`. More buckets means more chances for a duplicate pair to be detected (better recall).
+
+To run single-threaded (e.g. for debugging):
 
 ```bash
-python deduplication/deduplicate.py --tasks 14 --num-buckets 14
+python deduplication/deduplicate.py --tasks 1 --num-buckets 1
 ```
-
-More buckets with the same `--hashes-per-bucket` improves recall — more bands means more chances for a duplicate pair to be detected.
