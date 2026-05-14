@@ -158,7 +158,17 @@ def make_dataset_readers(
     for path in paths:
         p = Path(path)
 
-        if p.exists():
+        if p.is_file() and p.suffix in (".jsonl", ".json"):
+            # raw JSONL file — concatenate text_key fields, keep all columns in metadata
+            text_keys_list = [text_key] if isinstance(text_key, str) else list(text_key)
+            def adapter(_reader, sample: dict, path: str, id_in_file: int | str) -> dict:
+                return {
+                    "text": " ".join(sample.get(k) or "" for k in text_keys_list).strip(),
+                    "id": str(id_in_file),
+                    "metadata": sample,
+                }
+            readers.append(JsonlReader(data_folder=str(p.parent), glob_pattern=p.name, adapter=adapter, limit=limit))
+        elif p.exists():
             if _is_hf_dataset_dir(p):
                 readers.append(LocalHFDatasetReader(path, text_key=text_key, id_key=id_key, limit=limit))
             else:

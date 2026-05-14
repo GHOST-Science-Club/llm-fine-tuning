@@ -21,6 +21,7 @@ Usage:
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +33,7 @@ from datatrove.utils.hashing import HashConfig, create_hash_func
 from datatrove.utils.text import TextNormConfig, ngrams, simplify_text
 from datatrove.utils.word_tokenizers import load_word_tokenizer
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
 from readers import make_dataset_readers
 
 ROOT = Path(__file__).parent.parent
@@ -203,9 +205,17 @@ def run_filter(
         from datasets import load_dataset as hf_load
         raw_ds = hf_load("json", data_files=[str(f) for f in jsonl_files], split="train")
 
+        # collect all metadata keys across rows so every row has the same columns
+        all_keys = set()
+        for row in raw_ds:
+            all_keys.update((row.get("metadata") or {}).keys())
+        all_keys.discard("_source_path")
+
         def flatten_row(row):
             flat = dict(row.get("metadata") or {})
             flat.pop("_source_path", None)
+            for k in all_keys:
+                flat.setdefault(k, None)
             return flat
 
         clean_ds = raw_ds.map(flatten_row, remove_columns=raw_ds.column_names)
