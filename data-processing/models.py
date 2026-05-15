@@ -1,4 +1,5 @@
 import json
+import time
 from enum import Enum
 from pathlib import Path
 from .utils import debug, call_llm, save_dataset
@@ -13,7 +14,7 @@ class Category(str, Enum):
 
 class DataProcessingPipeline:
 
-    def __init__(self, input_file: Path, output_file: Path, dataset_dir: Path, checkpoint_file: Path, quiet: bool = False):
+    def __init__(self, input_file: Path, output_file: Path, dataset_dir: Path, checkpoint_file: Path, quiet: bool = False, max_threads: int = 10):
         self.input_file = input_file
         self.output_file = output_file
         self.dataset_dir = dataset_dir
@@ -27,6 +28,18 @@ class DataProcessingPipeline:
             "llm_parse_errors": 0,
             "classification_errors": 0
         }
+        self.usage = {"total_tokens": 0,
+            "prompt_tokens": 0,
+            "response_tokens": 0
+             }
+        self.time_elapsed = 0
+        self.max_threads = max_threads
+
+    def calculate_tokens(self, fetched_usage: dict):
+        self.usage['total_tokens'] += fetched_usage.get("total_tokens", 0)
+        self.usage['prompt_tokens'] += fetched_usage.get("prompt_tokens", 0)
+        self.usage['response_tokens'] += fetched_usage.get("response_tokens",0)
+
 
     def _load_data(self) -> None:
         """Loading raw data."""
@@ -61,7 +74,8 @@ class DataProcessingPipeline:
         user_prompt = f"Thread title: {title}\n\nPosts:\n{posts_text}"
 
 
-        raw = call_llm(SPLIT_SYSTEM, user_prompt)
+        raw , usage = call_llm(SPLIT_SYSTEM, user_prompt)
+        self.calculate_tokens(usage)
         debug("STEP 0 — split_tasks | raw LLM output", raw)
 
         try:
@@ -88,7 +102,9 @@ class DataProcessingPipeline:
             f"Problem: {question[:1000]}\n"
             f"contains_images in relevant posts: {str(has_images).lower()}"
         )
-        raw = call_llm(FILTER_SYSTEM, user_prompt)
+        raw, usage  = call_llm(FILTER_SYSTEM, user_prompt)
+        self.calculate_tokens(usage)
+
         debug("STEP 1 — filter_question | raw LLM output", raw)
 
         keep = True
@@ -110,7 +126,9 @@ class DataProcessingPipeline:
         Returns {"category": Category | None, "reason": str}.
         """
         user_prompt = f"Problem: {question[:1000]}"
-        raw = call_llm(CLASSIFY_SYSTEM, user_prompt)
+        raw, usage = call_llm(CLASSIFY_SYSTEM, user_prompt)
+        self.calculate_tokens(usage)
+
 
         category_str = ""
         reason = ""
@@ -153,7 +171,10 @@ class DataProcessingPipeline:
             f"Find the best answer.{hint}"
         )
 
-        raw = call_llm(FIND_ANSWER_SYSTEM, user_prompt).strip()
+        raw, usage = call_llm(FIND_ANSWER_SYSTEM, user_prompt)
+        self.calculate_tokens(usage)
+        raw = raw.strip()
+
         debug("STEP 2 — find_answer | raw LLM output", raw)
 
         if "NO_ANSWER" in raw or not raw:
@@ -190,13 +211,19 @@ class DataProcessingPipeline:
             f"Raw answer: {raw_answer[:2000]}\n\n"
             "Rewritten solution:"
         )
-        result = call_llm(REWRITE_SYSTEM, user_prompt).strip()
+        result, usage = call_llm(REWRITE_SYSTEM, user_prompt)
+        self.calculate_tokens(usage)
+        result = result.strip()
+
         debug("STEP 3 — rewrite_answer | full rewritten solution", result)
         return result
 
     def _fix_latex_solution(self, solution: str) -> str:
         """Final LLM pass to catch any remaining LaTeX syntax errors in the solution."""
-        result = call_llm(FIX_LATEX_SYSTEM, solution).strip()
+        result , usage = call_llm(FIX_LATEX_SYSTEM, solution)
+        result = result.strip()
+        self.calculate_tokens(usage)
+
         # Strip markdown code fences in case the model wraps its output
         result = result.removeprefix('```latex').removeprefix('```').removesuffix('```').strip()
         debug("STEP 4 — fix_latex_solution | corrected output", result)
@@ -230,8 +257,11 @@ class DataProcessingPipeline:
             print(f"\nStarting from the {start_thread_idx} index")
 
         # We open the file in write mode to stream results as they are ready
+        sTime = time.time()
         with open(self.output_file, file_mode, encoding="utf-8") as out_f:
             for thread_idx, thread in enumerate(self.raw_data[start_thread_idx:], start=start_thread_idx):
+                if thread_idx == self.max_threads:
+                    break
                 if not self.quiet:
                     print(f"\n--- Thread {thread_idx}/{len(self.raw_data)} ---")
 
@@ -383,6 +413,12 @@ class DataProcessingPipeline:
                     print("Warning! Checkpoint could not have been found!")
 
         print("\n=== PIPELINE FINISHED ===")
+        fTime = time.time()
+        eTime = fTime - sTime
+        print(eTime)
+        with open('stats.json', 'w') as fp:
+            json.dump(self.usage, fp)
+        print(f"Elapsed time {eTime}")
         print(f"Results saved to: {self.output_file}")
         print("Pipeline Statistics:", json.dumps(self.stats, indent=2))
         save_dataset(self.output_file, self.dataset_dir)

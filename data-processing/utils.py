@@ -4,7 +4,7 @@ import requests
 from .config import  API_KEY, MODEL, BASE_URL, DEBUG
 from datasets import load_dataset
 
-def call_llm(system_prompt: str, user_prompt: str) -> str:
+def call_llm(system_prompt: str, user_prompt: str):
     """
     Call the LLM API (OpenAI-compatible).
     Swap BASE_URL / auth headers here when moving to PCSS.
@@ -33,7 +33,13 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
         print(f"\n[API ERROR] Payload: {payload}")
         print(f"[API ERROR] Server response: {response.text}")
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"].strip()
+
+    usage = {"total_tokens": response.json()['usage']['total_tokens'],
+            "prompt_tokens": response.json()['usage']['prompt_tokens'],
+            "response_tokens": response.json()['usage']['completion_tokens']
+             }
+    #print(type(usage['total_tokens']))
+    return response.json()["choices"][0]["message"]["content"].strip(), usage
 
 def debug(stage: str, content: str) -> None:
     """Print a labelled debug block when DEBUG=true."""
