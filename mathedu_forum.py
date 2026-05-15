@@ -42,17 +42,16 @@ def get_soup(url: str, retries: int = 3) -> BeautifulSoup | None:
     for attempt in range(1, retries + 1):
         try:
             resp = session.get(url, timeout=20)
-     
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
-            resp.encoding = resp.apparent_encoding or "utf-8"
+            resp.encoding = "utf-8"
             return BeautifulSoup(resp.text, "html.parser")
         except requests.RequestException as exc:
             if attempt < retries:
                 time.sleep(3 * attempt)
             else:
-                print(f"      [BŁĄD HTTP] {url}: {exc}")
+                print(f"      [error HTTP] {url}: {exc}")
     return None
 
 
@@ -68,7 +67,6 @@ def parse_date(raw: str) -> str:
 
 
 def thread_exists(soup: BeautifulSoup) -> bool:
-  
     if soup is None:
         return False
     for t in soup.find_all("table"):
@@ -79,8 +77,7 @@ def thread_exists(soup: BeautifulSoup) -> bool:
                     return True
     return False
 
-def parse_posts_from_page(soup: BeautifulSoup) -> list[dict]:
-  
+def parse_posts_from_page(soup: BeautifulSoup, index_offset: int = 0) -> list[dict]:
     posts = []
 
     table = None
@@ -103,7 +100,6 @@ def parse_posts_from_page(soup: BeautifulSoup) -> list[dict]:
         if not author_cell.get_text(strip=True) and not content_cell.get_text(strip=True):
             continue
 
-        
         a_tag = author_cell.find("a", href=re.compile(r'/forum/uzytkownik'))
         if a_tag:
             author = a_tag.get_text(strip=True)
@@ -129,7 +125,7 @@ def parse_posts_from_page(soup: BeautifulSoup) -> list[dict]:
         contains_images = False
         for img in content_cell.find_all("img"):
             src = img.get("src", "").lower()
-            if not any(x in src for x in ["smil", "icon", "emoji"]):
+            if not any(x in src for x in ["smil", "icon", "emoji", "d.gif"]):
                 contains_images = True
                 break
 
@@ -137,16 +133,16 @@ def parse_posts_from_page(soup: BeautifulSoup) -> list[dict]:
             continue
 
         posts.append({
-            "author": author,
-            "date": date_iso,
-            "content": content,
+            "index":           index_offset + len(posts),
+            "author":          author,
+            "date":            date_iso,
+            "content":         content,
             "contains_images": contains_images,
         })
 
     return posts
 
 def scrape_thread(cat_key: str, task_id: int) -> dict | None:
-    
     base_url = f"{BASE_URL}/forum/temat,{cat_key},{task_id}"
     all_posts = []
     title = ""
@@ -165,9 +161,8 @@ def scrape_thread(cat_key: str, task_id: int) -> dict | None:
         if soup is None:
             break
 
-        page_posts = parse_posts_from_page(soup)
+        page_posts = parse_posts_from_page(soup, index_offset=len(all_posts))
         all_posts.extend(page_posts)
-
 
         next_exists = any(
             int(m.group(1)) > page
@@ -184,15 +179,12 @@ def scrape_thread(cat_key: str, task_id: int) -> dict | None:
     if not all_posts:
         return None
 
-    for i, post in enumerate(all_posts):
-        post["index"] = i
-
     return {
-        "source": SOURCE,
-        "url": f"{base_url},0",
-        "title": title,
+        "source":     SOURCE,
+        "url":        f"{base_url},0",
+        "title":      title,
         "scraped_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "posts": all_posts,
+        "posts":      all_posts,
     }
 
 def load_scraped_urls(path: Path) -> set[str]:
@@ -216,24 +208,9 @@ def append_jsonl(path: Path, record: dict) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Scraper forum math.edu.pl → JSONL")
-    parser.add_argument(
-        "--categories", "-c",
-        nargs="+",
-        choices=list(CATEGORIES.keys()),
-        default=list(CATEGORIES.keys()),
-        metavar="KAT",
-        
-    )
-    parser.add_argument(
-        "--output", "-o",
-        default="math_edu_forum.jsonl",
-        
-    )
-    parser.add_argument(
-        "--start-id",
-        type=int, default=1,
-        
-    )
+    parser.add_argument("--categories", "-c", nargs="+", choices=list(CATEGORIES.keys()), default=list(CATEGORIES.keys()), metavar="KAT")
+    parser.add_argument("--output", "-o", default="math_edu_forum_4.jsonl")
+    parser.add_argument("--start-id", type=int, default=1)
     args = parser.parse_args()
 
     output_path = Path(args.output)
