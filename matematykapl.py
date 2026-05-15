@@ -71,7 +71,7 @@ def get_thread_urls_from_category(category_url: str, session: requests.Session):
         for a in soup.find_all("a", href=True):
             full = urljoin(BASE, a["href"])
             if THREAD_RE.search(full) and "matematyka.pl" in full:
-                thread_urls.add(full.split("?")[0].split("#")[0]) 
+                thread_urls.add(full.split("?")[0].split("#")[0])
 
         next_link = soup.select_one("a[rel='next']")
         page_url = urljoin(BASE, next_link["href"].split("?")[0]) if next_link and next_link.get("href") else None
@@ -81,6 +81,8 @@ def get_thread_urls_from_category(category_url: str, session: requests.Session):
 
 
 def extract_content(content_div) -> str:
+    for tag in content_div.find_all(class_="smilies"):
+        tag.decompose()
     return content_div.get_text(separator="\n", strip=True)
 
 
@@ -97,7 +99,7 @@ def scrape_thread(url: str, session: requests.Session) -> dict | None:
     title_tag = soup.find("h2", class_="topic-title")
     title = title_tag.get_text(strip=True) if title_tag else ""
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    
+
     posts = []
     page_url = url
 
@@ -122,7 +124,12 @@ def scrape_thread(url: str, session: requests.Session) -> dict | None:
             content_div = post.find("div", class_="content")
             if content_div:
                 content = extract_content(content_div)
-                contains_images = bool(content_div.find("img"))
+                contains_images = False
+                for img in content_div.find_all("img"):
+                    src = img.get("src", "").lower()
+                    if not any(x in src for x in ["smil", "icon", "emoji", "d.gif"]):
+                        contains_images = True
+                        break
             else:
                 content = ""
                 contains_images = False
