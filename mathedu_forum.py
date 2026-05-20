@@ -33,7 +33,7 @@ HEADERS = {
     "Accept-Language": "pl,en;q=0.9",
 }
 
-logging.basicConfig(level=logging.WARNING) 
+logging.basicConfig(level=logging.WARNING)
 
 session = requests.Session()
 session.headers.update(HEADERS)
@@ -122,12 +122,7 @@ def parse_posts_from_page(soup: BeautifulSoup, index_offset: int = 0) -> list[di
         content = "\n".join(content_lines).strip()
         content = re.sub(r'\n{3,}', '\n\n', content)
 
-        contains_images = False
-        for img in content_cell.find_all("img"):
-            src = img.get("src", "").lower()
-            if not any(x in src for x in ["smil", "icon", "emoji", "d.gif"]):
-                contains_images = True
-                break
+        contains_images = bool(re.search(r'https?://\S+\.(?:jpg|jpeg|png|gif|webp)', content, re.IGNORECASE))
 
         if not content and not contains_images:
             continue
