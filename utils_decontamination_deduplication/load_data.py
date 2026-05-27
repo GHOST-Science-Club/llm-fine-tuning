@@ -33,7 +33,7 @@ DEFAULT_BENCHMARK_PATH = str(ROOT / "data" / "benchmark.jsonl")
 DEFAULT_OUTPUT_DIR = str(ROOT / "data" / "decontamination_output")
 
 
-def load_and_preview( # for testing of corectness of data loading
+def load_and_preview( # for testing of correctnes of data loading
     dataset_paths: list[str],
     benchmark_paths: list[str],
     dataset_text_key: str,

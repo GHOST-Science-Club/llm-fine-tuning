@@ -87,14 +87,14 @@ class HubHFDatasetReader(PipelineStep):
     def __init__(
         self,
         repo_id: str,
-        text_key: str = "text",
+        text_key: str | list[str] = "text",
         id_key: Optional[str] = None,
         split: str = "train",
         limit: int = -1,
     ):
         super().__init__()
         self.repo_id = repo_id
-        self.text_key = text_key
+        self.text_keys = [text_key] if isinstance(text_key, str) else text_key
         self.id_key = id_key
         self.split = split
         self.limit = limit
@@ -108,16 +108,29 @@ class HubHFDatasetReader(PipelineStep):
             if self.limit != -1 and i // world_size >= self.limit:
                 break
 
-            text = sample.get(self.text_key) or ""
+            text = " ".join(sample.get(k) or "" for k in self.text_keys).strip()
             doc_id = (
                 str(sample[self.id_key])
                 if self.id_key and self.id_key in sample
                 else f"{self.repo_id}_{i}"
             )
-            metadata = {k: v for k, v in sample.items() if k not in (self.text_key, self.id_key)}
+            metadata = {k: v for k, v in sample.items() if k not in (*self.text_keys, self.id_key)}
+            for k in self.text_keys:
+                if k in sample:
+                    metadata[k] = sample[k]
             metadata["_source_repo"] = self.repo_id
 
             yield Document(text=text, id=doc_id, metadata=metadata)
+
+
+def _make_benchmark_adapter(text_key: str, id_key: str):
+    def adapter(_reader, sample: dict, path: str, id_in_file: int | str) -> dict:
+        return {
+            "text": sample.get(text_key, ""),
+            "id": str(sample.get(id_key, id_in_file)),
+            "metadata": {k: v for k, v in sample.items() if k not in (text_key, id_key)},
+        }
+    return adapter
 
 
 def make_benchmark_reader(
@@ -130,15 +143,7 @@ def make_benchmark_reader(
     Returns a datatrove JsonlReader for a benchmark .jsonl file or folder of .jsonl files.
     Uses an adapter to map arbitrary column names to the Document format.
     """
-
-    def adapter(_reader, sample: dict, path: str, id_in_file: int | str) -> dict:
-        return {
-            "text": sample.get(text_key, ""),
-            "id": str(sample.get(id_key, id_in_file)),
-            "metadata": {k: v for k, v in sample.items() if k not in (text_key, id_key)},
-        }
-
-    return JsonlReader(data_folder=path, adapter=adapter, limit=limit)
+    return JsonlReader(data_folder=path, adapter=_make_benchmark_adapter(text_key, id_key), limit=limit, glob_pattern="*.jsonl")
 
 
 def make_dataset_readers(
@@ -199,7 +204,7 @@ def make_benchmark_readers(
     for path in paths:
         p = Path(path)
         if p.is_file():
-            readers.append(make_benchmark_reader(str(p.parent), text_key=text_key, id_key=id_key, limit=limit))
+            readers.append(JsonlReader(data_folder=str(p.parent), glob_pattern=p.name, adapter=_make_benchmark_adapter(text_key, id_key), limit=limit))
         elif p.is_dir():
             readers.append(make_benchmark_reader(str(p), text_key=text_key, id_key=id_key, limit=limit))
         else:

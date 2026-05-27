@@ -163,3 +163,6 @@ To run single-threaded (e.g. for debugging):
 ```bash
 python deduplication/deduplicate.py --tasks 1 --num-buckets 1
 ```
+
+
+### testing. if you wish to test it as i did you can put data floder from here https://drive.google.com/file/d/1lJH0J5R2QEa_5Os_ffndWd4cLh3N5sE_/view?usp=sharing and put it in the repo unipped

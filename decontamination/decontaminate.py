@@ -33,7 +33,7 @@ from datatrove.utils.hashing import HashConfig, create_hash_func
 from datatrove.utils.text import TextNormConfig, ngrams, simplify_text
 from datatrove.utils.word_tokenizers import load_word_tokenizer
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils_decontamination_deduplication"))
 from readers import make_dataset_readers
 
 ROOT = Path(__file__).parent.parent
@@ -118,7 +118,7 @@ def build_index(
     report exactly which benchmark task a removed training example matched.
     """
     config = NGramsDecontConfig(n_grams=ngram_size, find_query_ngrams=True)
-    tokenizer = load_word_tokenizer("en")
+    tokenizer = load_word_tokenizer("pl")
     hash_func = create_hash_func(config.hash_config)
     norm_config = config.norm_config
 
@@ -181,7 +181,7 @@ def run_filter(
     dataset_readers = make_dataset_readers(dataset_paths, text_key=["question", "raw_answer"], limit=limit)
 
     for i, reader in enumerate(dataset_readers):
-        source = reader.path if hasattr(reader, "path") else reader.repo_id
+        source = reader.path if hasattr(reader, "path") else getattr(reader, "repo_id", None) or getattr(reader, "data_folder", repr(reader))
         print(f"\n=== Filtering dataset {i+1}/{len(dataset_readers)}: {source} ===")
 
         executor = LocalPipelineExecutor(

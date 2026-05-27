@@ -26,7 +26,7 @@ import argparse
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils_decontamination_deduplication"))
 
 from datatrove.executor import LocalPipelineExecutor
 from datatrove.pipeline.dedup import MinhashDedupBuckets, MinhashDedupCluster, MinhashDedupFilter, MinhashDedupSignature
