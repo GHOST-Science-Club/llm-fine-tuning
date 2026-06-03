@@ -8,13 +8,29 @@ from datasets import load_dataset
 from config import Config as cfg
 
 
-def formatting_prompts_func(example):
-    """ Formats raw dataset example into ChatML template """
-    messages = [
-        {"role": "user",    "content": example["query"]},
-        {"role": "assistant","content": example["response"]},
-    ]
-    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+def formatting_prompts_func(examples: dict[str, list[str]]) -> list[str]:
+    """ Formats raw dataset batch into ChatML template strings """
+
+    queries = examples["query"]
+    responses = examples["response"]
+
+    formatted_texts = []
+
+
+    for query, response in zip(queries, responses):
+        messages = [
+            {"role": "user", "content": query},
+            {"role": "assistant", "content": response},
+        ]
+
+        text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False
+        )
+        formatted_texts.append(text)
+
+    return formatted_texts
 
 if __name__ == "__main__":
 
