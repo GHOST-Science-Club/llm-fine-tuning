@@ -6,35 +6,31 @@ Runs Supervised Fine-Tuning (SFT) on the **Bielik-11B-v3.0-Instruct** model usin
 
 ## Setup (one-time per user)
 
-SSH into the cluster and add your project path to `~/.bashrc`:
+### 1. API Tokens & Configuration
+
+The Bielik model is gated and training logs to Weights & Biases (W&B). You need tokens for both.
+
+1. **HuggingFace:** Request access at [speakleash/Bielik-11B-v3.0-Instruct](https://huggingface.co/speakleash/Bielik-11B-v3.0-Instruct) and generate a token at your [settings page](https://huggingface.co/settings/tokens). The token needs **Write** access and **"Create and manage repos"** permission (required to push checkpoints during training).
+2. **Weights & Biases:** Create an account at [wandb.ai](https://wandb.ai) and copy your API key from your [authorizations page](https://wandb.ai/authorize).
+
+### 2. Create `.env`
+
+Copy `.env.example` to `.env` in the `supervised-fine-tuning` directory and fill in all values:
 
 ```bash
-echo 'export PROJECT_PATH="/mnt/storage_6/project_data/YOUR_GRANT"' >> ~/.bashrc
-source ~/.bashrc
-
+cp .env.example .env
 ```
 
-Replace `YOUR_GRANT` with your actual grant ID (e.g., `pl0966-02`).
+| Variable | Required | Description |
+|---|---|---|
+| `GRANT` | **yes** | Your HPC grant ID (e.g. `pl0966-02`) — used to build the project path |
+| `HF_TOKEN` | yes | HuggingFace token with Write + repo-create permissions |
+| `WANDB_API_KEY` | yes (if logging) | W&B API key |
+| `PUSH_TO_HUB` | no | `true` to push checkpoints to HF Hub during training |
+| `LOG_TO_WANDB` | no | `true` to enable W&B logging |
+| `QUANTIZATION` | no | `none` (default, for H100), `4b`, or `8b` |
+| `MAX_TRAIN_SAMPLES` | no | Limit training examples; `0` = full dataset |
 
-## API Tokens & Configuration (one-time per user)
-
-The Bielik model is gated, and training requires logging to Weights & Biases (W&B). You need tokens for both.
-
-1. **HuggingFace:** Request access at [speakleash/Bielik-11B-v3.0-Instruct](https://huggingface.co/speakleash/Bielik-11B-v3.0-Instruct) and generate a write-access token at your [settings page](https://huggingface.co/settings/tokens).
-2. **Weights & Biases:** Create an account at [wandb.ai](https://www.google.com/search?q=https://wandb.ai/) and copy your API key from your [authorizations page](https://wandb.ai/authorize).
-3. Create a `.env` file in the `supervised-fine-tuning` directory and populate it:
-
-```bash
-cat <<EOF > $PROJECT_PATH/supervised-fine-tuning/.env
-HF_TOKEN="your_hf_token_here"
-WANDB_API_KEY="your_wandb_api_key_here"
-PUSH_TO_HUB="true"
-LOG_TO_WANDB="true"
-QUANTIZATION="none" # Use 'none' for H100, or '4b'/'8b' for smaller GPUs
-MAX_TRAIN_SAMPLES="0" # 0 means use the full dataset
-EOF
-
-```
 
 ---
 
@@ -43,34 +39,34 @@ EOF
 From your local machine, transfer the project files to the cluster:
 
 ```bash
-cd /mnt/e/Projects/Pycharm/llm-fine-tuning/supervised-fine-tuning # (Your local project directory)
 scp -i ~/.ssh/id_YOUR_ID -r ./* username@eagle.man.poznan.pl:/mnt/storage_6/project_data/YOUR_GRANT/supervised-fine-tuning
-
 ```
 
 ---
 
 ## Running the Setup
 
-If you are running the fine-tuning for the first time, you must install the dependencies and create a virtual environment.
+SSH into the cluster, navigate to the project directory, and run setup **once** from that directory (the scripts source `.env` from the current directory):
 
 ```bash
-cd $PROJECT_PATH/supervised-fine-tuning
+cd /mnt/storage_6/project_data/YOUR_GRANT/supervised-fine-tuning
 bash setup.sh
-
 ```
+
+This creates the Python venv and installs all dependencies.
 
 ---
 
 ## Running the Training
 
-Navigate to the fine-tuning directory and submit the SLURM job:
+Submit the SLURM job **from the project directory** (the script sources `.env` from the current directory):
 
 ```bash
-cd $PROJECT_PATH/supervised-fine-tuning
+cd /mnt/storage_6/project_data/YOUR_GRANT/supervised-fine-tuning
 sbatch run_training.sh
-
 ```
+
+Checkpoints are saved to `models/bielik-tuning-<timestamp>/`.
 
 ---
 
@@ -87,39 +83,44 @@ tail -f logs/JOBID.out
 
 # Check for critical errors
 cat logs/JOBID.err
-
 ```
 
 **Training Metrics:**
-Once the job starts, open your [Weights & Biases Dashboard](https://www.google.com/search?q=https://wandb.ai/) to track the training loss, learning rate, and evaluation metrics in real-time.
+Once the job starts, open your [Weights & Biases Dashboard](https://wandb.ai) to track the training loss, learning rate, and evaluation metrics in real-time.
 
 ---
 
 ## Project Structure
 
 ```text
-$PROJECT_PATH/
-├── supervised-fine-tuning/
-│       ├── run_training.sh        # SLURM job submission script
-│       ├── setup.sh               # Script for venv creation and dependency installation
-│       ├── train.py               # Main SFT training script (TRL, PEFT, Datasets)
-│       ├── config.py              # Centralized configuration class (hyperparameters)
-│       ├── .env                   # Environment variables (Tokens, Flags)
-│       └── requirements.txt       # Dependencies (torch, transformers, trl, peft, etc.)
-├── logs/                          # Directory for SLURM output (.out) and error (.err) files
-├── hf_cache/                      # Local HuggingFace model cache (prevents redownloads)
-└── venv/                          # Shared Python virtual environment
+supervised-fine-tuning/
+├── train.py               # Main SFT training script (TRL, PEFT, Datasets)
+├── config.py              # Centralized configuration (hyperparameters, naming)
+├── run_training.sh        # SLURM job submission script
+├── setup.sh               # venv creation and dependency installation
+├── requirements.txt       # Python dependencies
+├── .env                   # Environment variables (tokens, flags) 
+├── .env.example           # Template for .env
+├── models/                # Saved checkpoints (created at runtime)
+└── logs/                  # SLURM output (.out) and error (.err) files
+```
 
+The venv and HuggingFace model cache live one level up, shared across runs:
+
+```text
+/mnt/storage_6/project_data/YOUR_GRANT/
+├── venv/                  # Shared Python virtual environment
+└── hf_cache/              # HuggingFace model cache (prevents redownloads)
 ```
 
 ---
 
 ## Troubleshooting
 
-* **Job pending (`PD`):** Normal behavior, waiting for a free GPU partition. Check status with `squeue -u $USER`.
-* **`OutOfMemoryError (OOM)`:** The model + dataset exceeded VRAM or System RAM.
-* *Fix:* If it crashes during loading (System RAM), increase `#SBATCH --mem` in `run_training.sh`. If it crashes during training (GPU VRAM), reduce `BATCH_SIZE` in `config.py` or enable 4-bit quantization in `.env`.
-
-
-* **`KeyError` during dataset loading:** Make sure you are using the correct `split` name ('train', 'test', or 'validation') matching the specific dataset in `train.py`.
-* **W&B Sync Errors:** Ensure compute nodes have outbound internet access or consider running `wandb offline` and syncing manually later.
+* **Job pending (`PD`):** Normal — waiting for a free GPU. Check status with `squeue -u $USER`.
+* **`ERROR: Set GRANT in .env`:** The scripts can't find your project path. Make sure `.env` has `GRANT=your_grant_id` and that you run `sbatch`/`bash setup.sh` from the `supervised-fine-tuning` directory.
+* **`OutOfMemoryError (OOM)`:**
+  * *System RAM* (during model load): Increase `#SBATCH --mem` in `run_training.sh`.
+  * *GPU VRAM* (during training): Reduce `TRAIN_BATCH_SIZE` in `config.py` or set `QUANTIZATION=4b` in `.env`.
+* **`403 Forbidden` on HF Hub:** Your HF token is missing the **"Create and manage repos"** permission. Edit the token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) or set `PUSH_TO_HUB=false` in `.env` to disable hub pushing.
+* **W&B Sync Errors:** Ensure compute nodes have outbound internet access or run `wandb offline` and sync manually later.
