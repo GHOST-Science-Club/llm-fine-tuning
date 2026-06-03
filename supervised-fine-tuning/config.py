@@ -3,13 +3,21 @@ from pathlib import Path
 from datetime import datetime
 import torch
 from dotenv import load_dotenv
+from dataclasses import dataclass
+
 
 # Load .env file automatically upon import
 ROOT_PATH = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT_PATH / ".env", override=True)
 
-
+@dataclass
 class Config:
+
+    """
+    Configuration class that centralizes all settings for the fine-tuning process.
+    Values are loaded from environment variables with sensible defaults where applicable.
+    """
+
     # --- Environment Variables ---
     PUSH_TO_HUB = os.getenv('PUSH_TO_HUB', 'false').lower() == 'true'
     LOG_TO_WANDB = os.getenv('LOG_TO_WANDB', 'false').lower() == 'true'
@@ -35,7 +43,7 @@ class Config:
 
     # --- Hyperparameters: Overall ---
     EPOCHS = 3
-    TRAIN_BATCH_SIZE = 16
+    TRAIN_BATCH_SIZE = 4
     EVAL_BATCH_SIZE = 4
     MAX_SEQUENCE_LENGTH = 4096
     GRADIENT_ACCUMULATION_STEPS = 4
@@ -51,7 +59,13 @@ class Config:
     WARMUP_RATIO = 0.05
     LR_SCHEDULER_TYPE = 'cosine'
     WEIGHT_DECAY = 0.001
-    OPTIMIZER = "paged_adamw_32bit"
+
+    if QUANTIZATION == '4b':
+        OPTIMIZER = "paged_adamw_4bit"
+    if QUANTIZATION == '8b':
+        OPTIMIZER = "paged_adamw_8bit"
+    else:
+        OPTIMIZER = "paged_adamw_32bit"
 
     # --- Tracking & Validation ---
     VAL_SIZE = 1000  # Number of samples to hold out for the validation split
