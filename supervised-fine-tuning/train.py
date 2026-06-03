@@ -34,6 +34,8 @@ def formatting_prompts_func(examples: dict[str, list[str]]) -> list[str]:
 
 if __name__ == "__main__":
 
+    assert cfg.QUANTIZATION in ("none", "4b", "8b"), f"Unknown QUANTIZATION: {cfg.QUANTIZATION}"
+
     set_seed(cfg.RANDOM_SEED)
 
     # 1. Authentication and Logging setup
@@ -88,7 +90,8 @@ if __name__ == "__main__":
         cfg.BASE_MODEL,
         device_map="auto",
         quantization_config=quant_config,
-        torch_dtype= torch.bfloat16
+        torch_dtype= torch.bfloat16,
+        attn_implementation="flash_attention_2"
     )
 
     # Add dedicated pad token to vocab
@@ -141,6 +144,7 @@ if __name__ == "__main__":
         hub_private_repo=True,
         eval_strategy="steps",
         eval_steps=cfg.SAVE_STEPS,
+        load_best_model_at_end=True,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         seed=cfg.RANDOM_SEED,
@@ -161,6 +165,7 @@ if __name__ == "__main__":
     # 9. Execute Training
     print("Starting SFT training process...")
     fine_tuning.train()
+
 
     # 10. Save and Push Adapters
     if cfg.PUSH_TO_HUB:
