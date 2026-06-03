@@ -1,7 +1,7 @@
 import torch
 import wandb
 from huggingface_hub import login
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, set_seed
 from peft import LoraConfig, prepare_model_for_kbit_training
 from trl import SFTTrainer, SFTConfig
 from datasets import load_dataset
@@ -18,6 +18,8 @@ def formatting_prompts_func(example):
 
 if __name__ == "__main__":
 
+    set_seed(cfg.RANDOM_SEED)
+
     # 1. Authentication and Logging setup
     if cfg.HF_TOKEN:
         login(cfg.HF_TOKEN, add_to_git_credential=True)
@@ -32,7 +34,7 @@ if __name__ == "__main__":
     # MetaMathQA only provides a 'train' split. We load it and carve out a validation set.
     print(f"Loading dataset: {cfg.DATASET_NAME}...")
     raw_dataset = load_dataset(cfg.DATASET_NAME, split='train')
-    dataset = raw_dataset.train_test_split(test_size=cfg.VAL_SIZE)
+    dataset = raw_dataset.train_test_split(test_size=cfg.VAL_SIZE, seed= cfg.RANDOM_SEED)
     train = dataset['train']
     val = dataset['test']
 
@@ -117,6 +119,8 @@ if __name__ == "__main__":
         eval_strategy="steps",
         eval_steps=cfg.SAVE_STEPS,
         gradient_checkpointing=True,
+        seed=cfg.RANDOM_SEED,
+        data_seed=cfg.RANDOM_SEED
     )
 
     # 8. Initialize Trainer Engine

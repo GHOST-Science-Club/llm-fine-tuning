@@ -19,6 +19,9 @@ class Config:
     # Defaults to 'none' for H100, can be overridden to '4b' or '8b' via .env
     QUANTIZATION = os.getenv('QUANTIZATION', 'none').lower()
 
+    # Set fixed seed to make experiments reproducible
+    RANDOM_SEED = 42
+
     # --- Model and Project Configuration ---
     BASE_MODEL = "speakleash/Bielik-11B-v3.0-Instruct"
     PROJECT_NAME = "bielik-tuning"
