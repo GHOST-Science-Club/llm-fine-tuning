@@ -12,23 +12,26 @@
 
 module load python/3.11.9-gcc-11.5.0-5l7rvgy
 
-# Set PROJECT_PATH in your ~/.bashrc: export PROJECT_PATH="/mnt/storage_6/project_data/YOUR_GRANT"
-PROJECT="${PROJECT_PATH:-/mnt/storage_6/project_data/pl0966-02}"
-SFT_DIR="$PROJECT/supervised-fine-tuning"
-
-mkdir -p "$SFT_DIR/logs"
-
-export HF_HOME="$PROJECT/hf_cache"
-mkdir -p "$HF_HOME"
-
-if [ -f "$SFT_DIR/.env" ]; then
-    echo "Loading environment variables from .env file..."
-    set -a
-    source "$SFT_DIR/.env"
-    set +a
+# Load .env from submission directory (sbatch must be run from SFT_DIR)
+if [ -f ".env" ]; then
+    set -a; source ".env"; set +a
 else
     echo "WARNING: .env file not found. If the model is gated, it will fail."
 fi
+
+if [ -n "$PROJECT_PATH" ]; then
+    PROJECT="$PROJECT_PATH"
+elif [ -n "$GRANT" ]; then
+    PROJECT="/mnt/storage_6/project_data/$GRANT"
+else
+    echo "ERROR: Set GRANT in .env or PROJECT_PATH in ~/.bashrc"
+    exit 1
+fi
+
+SFT_DIR="$PROJECT/supervised-fine-tuning"
+
+export HF_HOME="$PROJECT/hf_cache"
+mkdir -p "$HF_HOME"
 
 if [ ! -d "$PROJECT/venv" ]; then
     echo "ERROR: venv environment does not exist."

@@ -1,5 +1,5 @@
---extra-index-url https://download.pytorch.org/whl/cu118
-torch==2.3.0+cu124
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0+cu124
 transformers<5.0.0
 peft
 trl
@@ -9,6 +9,5 @@ wandb
 python-dotenv
 bitsandbytes
 accelerate
-flash-attn
 sentencepiece
 protobuf
