@@ -126,6 +126,7 @@ if __name__ == "__main__":
         eval_strategy="steps",
         eval_steps=cfg.SAVE_STEPS,
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         seed=cfg.RANDOM_SEED,
         data_seed=cfg.RANDOM_SEED
     )
