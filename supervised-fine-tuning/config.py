@@ -40,6 +40,7 @@ class Config:
     RUN_NAME = f"{datetime.now():%Y-%m-%d_%H.%M.%S}"
     PROJECT_RUN_NAME = f"{PROJECT_NAME}-{RUN_NAME}"
     HUB_MODEL_NAME = f"{HF_USER}/{PROJECT_RUN_NAME}"
+    OUTPUT_DIR = f"models/{PROJECT_RUN_NAME}"
 
     # --- Hyperparameters: Overall ---
     EPOCHS = 3

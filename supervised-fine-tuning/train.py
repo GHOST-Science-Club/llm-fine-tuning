@@ -8,29 +8,13 @@ from datasets import load_dataset
 from config import Config as cfg
 
 
-def formatting_prompts_func(examples: dict[str, list[str]]) -> list[str]:
-    """ Formats raw dataset batch into ChatML template strings """
-
-    queries = examples["query"]
-    responses = examples["response"]
-
-    formatted_texts = []
-
-
-    for query, response in zip(queries, responses):
-        messages = [
-            {"role": "user", "content": query},
-            {"role": "assistant", "content": response},
-        ]
-
-        text = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=False
-        )
-        formatted_texts.append(text)
-
-    return formatted_texts
+def formatting_prompts_func(example: dict[str, str]) -> str:
+    """ Formats a single example into a ChatML template string """
+    messages = [
+        {"role": "user", "content": example["query"]},
+        {"role": "assistant", "content": example["response"]},
+    ]
+    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
 
 if __name__ == "__main__":
 
@@ -90,8 +74,8 @@ if __name__ == "__main__":
         cfg.BASE_MODEL,
         device_map="auto",
         quantization_config=quant_config,
-        torch_dtype= torch.bfloat16,
-        attn_implementation="flash_attention_2"
+        dtype= torch.bfloat16,
+        attn_implementation="sdpa"
     )
 
     # Add dedicated pad token to vocab
@@ -117,7 +101,7 @@ if __name__ == "__main__":
 
     # 7. Define Training Parameters (SFTConfig)
     train_parameters = SFTConfig(
-        output_dir=cfg.PROJECT_RUN_NAME,
+        output_dir=cfg.OUTPUT_DIR,
         num_train_epochs=cfg.EPOCHS,
         per_device_train_batch_size=cfg.TRAIN_BATCH_SIZE,
         per_device_eval_batch_size=cfg.EVAL_BATCH_SIZE,
@@ -141,6 +125,7 @@ if __name__ == "__main__":
         hub_strategy="every_save",
         push_to_hub=cfg.PUSH_TO_HUB,
         hub_model_id=cfg.HUB_MODEL_NAME,
+        hub_token=cfg.HF_TOKEN,
         hub_private_repo=True,
         eval_strategy="steps",
         eval_steps=cfg.SAVE_STEPS,
