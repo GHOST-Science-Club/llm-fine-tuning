@@ -74,7 +74,13 @@ if __name__ == "__main__":
         quantization_config=quant_config,
         torch_dtype= torch.bfloat16
     )
-    base_model.generation_config.pad_token_id = tokenizer.pad_token_id
+
+    # Add dedicated pad token to vocab
+    tokenizer.add_special_tokens({'pad_token': '<pad>'})
+
+    # Resize the model's embeddings to accommodate the new token
+    base_model.resize_token_embeddings(len(tokenizer))
+
 
     # 6. Prepare Model for LoRA Configuration
     if quant_config is not None:
@@ -87,6 +93,7 @@ if __name__ == "__main__":
         bias="none",
         task_type="CAUSAL_LM",
         target_modules=cfg.TARGET_MODULES,
+        modules_to_save=["embed_tokens", "lm_head"] # # Unfreezes these layers to train new tokens' weights.
     )
 
     # 7. Define Training Parameters (SFTConfig)
