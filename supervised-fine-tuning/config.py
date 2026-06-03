@@ -35,7 +35,8 @@ class Config:
 
     # --- Hyperparameters: Overall ---
     EPOCHS = 3
-    BATCH_SIZE = 16
+    TRAIN_BATCH_SIZE = 16
+    EVAL_BATCH_SIZE = 4
     MAX_SEQUENCE_LENGTH = 4096
     GRADIENT_ACCUMULATION_STEPS = 4
 
@@ -54,9 +55,11 @@ class Config:
 
     # --- Tracking & Validation ---
     VAL_SIZE = 1000  # Number of samples to hold out for the validation split
+    SAVE_LIMIT = 10  # Maximum number of checkpoints to keep
     SAVE_STEPS = 200  # Save and evaluate every 200 steps
     LOG_STEPS = 10  # Log metrics to W&B every 10 steps
     MAX_TRAIN_SAMPLES = int(os.getenv('MAX_TRAIN_SAMPLES', '0')) # Limit training examples from dataset
+    save_total_limit = 10,
 
     # --- Hardware Capabilities ---
     _capability = torch.cuda.get_device_capability() if torch.cuda.is_available() else (0, 0)
