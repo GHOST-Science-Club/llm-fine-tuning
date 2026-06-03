@@ -69,7 +69,8 @@ if __name__ == "__main__":
     base_model = AutoModelForCausalLM.from_pretrained(
         cfg.BASE_MODEL,
         device_map="auto",
-        quantization_config=quant_config
+        quantization_config=quant_config,
+        torch_dtype= torch.bfloat16
     )
     base_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
