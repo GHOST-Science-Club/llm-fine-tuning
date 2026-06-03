@@ -9,14 +9,12 @@ from config import Config as cfg
 
 
 def formatting_prompts_func(example):
-    """
-    Formats the raw dataset rows into conversational prompts.
-    MetaMathQA uses 'query' for the instruction and 'response' for the solution.
-    """
-    instruction = example['query']
-    response = example['response']
-
-    return f"<s>[INST] {instruction} [/INST] {response} </s>"
+    """ Formats raw dataset example into ChatML template """
+    messages = [
+        {"role": "user",    "content": example["query"]},
+        {"role": "assistant","content": example["response"]},
+    ]
+    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
 
 if __name__ == "__main__":
 
