@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=80GB
+#SBATCH --mem=160GB
 #SBATCH --time=24:00:00
 
 module load python/3.11.9-gcc-11.5.0-5l7rvgy
