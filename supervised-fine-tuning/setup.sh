@@ -40,7 +40,6 @@ source "$PROJECT/venv/bin/activate"
 
 echo "Installing/Updating libraries (this may take a few minutes)..."
 pip install --upgrade pip
-pip install torch==2.6.0+cu124 --index-url https://download.pytorch.org/whl/cu124
 pip install -r "$SFT_DIR/requirements.txt"
 
 echo "Setup complete."
