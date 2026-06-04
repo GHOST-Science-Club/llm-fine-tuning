@@ -5,7 +5,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import LoraConfig, prepare_model_for_kbit_training
 from trl import SFTTrainer, SFTConfig
 from datasets import load_dataset
-from config import Config as cfg
+from config import cfg
 
 
 class Trainer:
@@ -32,7 +32,10 @@ class Trainer:
     @staticmethod
     def _load_dataset():
         print(f"Loading dataset: {cfg.DATASET_NAME}...")
-        raw_dataset = load_dataset(cfg.DATASET_NAME, split='train')
+        try:
+            raw_dataset = load_dataset(cfg.DATASET_NAME, split='train')
+        except Exception as e:
+            raise RuntimeError(f"Failed to load dataset '{cfg.DATASET_NAME}'. Check DATASET_NAME in config.") from e
         dataset = raw_dataset.train_test_split(test_size=cfg.VAL_SIZE, seed=cfg.RANDOM_SEED)
         train = dataset['train']
         val = dataset['test']
@@ -61,18 +64,24 @@ class Trainer:
 
     @staticmethod
     def _load_tokenizer():
-        tokenizer = AutoTokenizer.from_pretrained(cfg.BASE_MODEL, trust_remote_code=True)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(cfg.BASE_MODEL, trust_remote_code=True)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load tokenizer for '{cfg.BASE_MODEL}'. Check BASE_MODEL and HF_TOKEN in .env.") from e
         tokenizer.padding_side = "right"
         return tokenizer
 
     def _load_model(self):
-        model = AutoModelForCausalLM.from_pretrained(
-            cfg.BASE_MODEL,
-            device_map="auto",
-            quantization_config=self.quant_config,
-            dtype=torch.bfloat16,
-            attn_implementation="sdpa"
-        )
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                cfg.BASE_MODEL,
+                device_map="auto",
+                quantization_config=self.quant_config,
+                dtype=torch.bfloat16,
+                attn_implementation="sdpa"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to load model '{cfg.BASE_MODEL}'. Check BASE_MODEL and HF_TOKEN in .env.") from e
         # Add dedicated pad token to vocab and resize embeddings to train its weights
         self.tokenizer.add_special_tokens({'pad_token': '<pad>'})
         model.resize_token_embeddings(len(self.tokenizer))
@@ -149,7 +158,10 @@ class Trainer:
         )
 
         print("Starting SFT training process...")
-        fine_tuning.train()
+        try:
+            fine_tuning.train()
+        except OSError as e:
+            raise RuntimeError("Training interrupted due to a disk error. Check available disk space and OUTPUT_DIR permissions.") from e
 
         if cfg.PUSH_TO_HUB:
             print(f"Pushing trained model to HF Hub: {cfg.PROJECT_RUN_NAME}...")
