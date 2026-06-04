@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 
 # Load .env file automatically upon import
-ROOT_PATH = Path(__file__).resolve().parents[1]
-load_dotenv(ROOT_PATH / ".env", override=True)
+MODULE_PATH = Path(__file__).resolve().parent
+load_dotenv(MODULE_PATH / ".env", override=True)
 
 @dataclass
 class Config:
@@ -70,10 +70,9 @@ class Config:
     SAVE_STEPS = 200  # Save and evaluate every 200 steps
     LOG_STEPS = 10  # Log metrics to W&B every 10 steps
     MAX_TRAIN_SAMPLES = int(os.getenv('MAX_TRAIN_SAMPLES', '0')) # Limit training examples from dataset
-    save_total_limit = 10,
 
     # --- Hardware Capabilities ---
-    _capability = (0, 0)
+    _CAPABILITY = (0, 0)
     USE_BF16 = False
 
     def __post_init__(self):
@@ -84,7 +83,7 @@ class Config:
             self.OPTIMIZER = "paged_adamw_8bit"
 
         if torch.cuda.is_available():
-            self._capability = torch.cuda.get_device_capability()
-            self.USE_BF16 = self._capability[0] >= 8  # Update based on actual GPU capability
+            self._CAPABILITY = torch.cuda.get_device_capability()
+            self.USE_BF16 = self._CAPABILITY[0] >= 8  # Update based on actual GPU capability
         else:
             print("Warning: No CUDA-compatible GPU detected. Training will be performed on CPU, which may be very slow.")
