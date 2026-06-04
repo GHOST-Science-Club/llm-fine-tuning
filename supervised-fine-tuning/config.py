@@ -61,12 +61,8 @@ class Config:
     LR_SCHEDULER_TYPE = 'cosine'
     WEIGHT_DECAY = 0.001
 
-    if QUANTIZATION == '4b':
-        OPTIMIZER = "paged_adamw_4bit"
-    if QUANTIZATION == '8b':
-        OPTIMIZER = "paged_adamw_8bit"
-    else:
-        OPTIMIZER = "paged_adamw_32bit"
+
+    OPTIMIZER = "paged_adamw_32bit"
 
     # --- Tracking & Validation ---
     VAL_SIZE = 1000  # Number of samples to hold out for the validation split
@@ -77,5 +73,18 @@ class Config:
     save_total_limit = 10,
 
     # --- Hardware Capabilities ---
-    _capability = torch.cuda.get_device_capability() if torch.cuda.is_available() else (0, 0)
-    USE_BF16 = _capability[0] >= 8  # Automatically use bfloat16 for Ampere architecture or newer (like H100)
+    _capability = (0, 0)
+    USE_BF16 = False
+
+    def __post_init__(self):
+        # Modify optimizer based on quantization setting
+        if self.QUANTIZATION == '4b':
+            self.OPTIMIZER = "paged_adamw_4bit"
+        elif self.QUANTIZATION == '8b':
+            self.OPTIMIZER = "paged_adamw_8bit"
+
+        if torch.cuda.is_available():
+            self._capability = torch.cuda.get_device_capability()
+            self.USE_BF16 = self._capability[0] >= 8  # Update based on actual GPU capability
+        else:
+            print("Warning: No CUDA-compatible GPU detected. Training will be performed on CPU, which may be very slow.")
