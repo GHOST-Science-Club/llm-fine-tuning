@@ -1,6 +1,9 @@
 import json
 from enum import Enum
 from pathlib import Path
+
+from datasets import load_dataset
+
 from .utils import debug, call_llm, save_dataset
 from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM
 from .latex_utils import normalize_latex
@@ -13,8 +16,8 @@ class Category(str, Enum):
 
 class DataProcessingPipeline:
 
-    def __init__(self, input_file: Path, output_file: Path, dataset_dir: Path, checkpoint_file: Path, quiet: bool = False):
-        self.input_file = input_file
+    def __init__(self, input_source: Path | str , output_file: Path, dataset_dir: Path, checkpoint_file: Path, quiet: bool = False):
+        self.input_source = input_source
         self.output_file = output_file
         self.dataset_dir = dataset_dir
         self.checkpoint_file = checkpoint_file
@@ -28,25 +31,28 @@ class DataProcessingPipeline:
             "classification_errors": 0
         }
 
+
     def _load_data(self) -> None:
-        """Loading raw data."""
-        debug("Loading data", f"Starting to load data from file: {self.input_file}")
+        """Loading raw data from (HF Hub or local JSONL."""
+        debug("Loading data", f"Attempting to load dataset from: {self.input_source}")
 
-        with open(self.input_file, encoding="utf-8") as f:
-            for line_number, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
+        try:
+            # Check if input_source is a local file path or a HF Hub repo identifier
+            if isinstance(self.input_source, Path) and self.input_source.suffix == '.jsonl':
+                dataset = load_dataset("json", data_files={"train": self.input_source}, split="train")
+            elif isinstance(self.input_source, str):
+                dataset = load_dataset(self.input_source, split='train')
+            else:
+                raise ValueError("Invalid input source. Must be a local JSONL file path or a Hugging Face Hub dataset identifier.")
 
-                try:
-                    thread = json.loads(line)
-                    self.raw_data.append(thread)
-                    self.stats["loaded"] += 1
+            loaded_records = dataset.to_list()
+            self.raw_data.extend(loaded_records)
+            self.stats["loaded"] += len(loaded_records)
 
-                except json.JSONDecodeError as e:
-                    print(f"Warning: JSON parsing error at line {line_number}. Skipping this record. Details: {e}")
+            debug("Loading data", f"Successfully loaded {len(loaded_records)} records.")
 
-        debug("Loading data", f"Successfully loaded {self.stats['loaded']} records.")
+        except Exception as e:
+            print(f"Error: Failed to load dataset from {self.input_source}. Details: {e}")
 
     def _split_tasks(self, title: str, posts: list[dict]) -> list[dict]:
         """
