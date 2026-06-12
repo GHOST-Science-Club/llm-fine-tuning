@@ -53,9 +53,12 @@ def save_dataset(
     repo_id: Optional[str] = None
 ) -> None:
     """Saves as hugging face dataset, optionally sets to HF Hub"""
-    input_str = str(input_file_path)
+    input_path = Path(input_file_path)
+    if not input_path.exists() or input_path.stat().st_size == 0:
+        print(f"Skipping dataset save: {input_path} is empty or does not exist.")
+        return
 
-    dataset = load_dataset("json", data_files=input_str, split="train")
+    dataset = load_dataset("json", data_files=str(input_path), split="train")
 
     if output_path:
         dataset.save_to_disk(output_path)

@@ -4,10 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-def _resolve_data_dir() -> Path:
-    module_path = Path(__file__).resolve().parent
-    load_dotenv(module_path.parents[0] / ".env", override=True)
-    return module_path / "data"
+_MODULE_PATH = Path(__file__).resolve().parent
+load_dotenv(_MODULE_PATH.parents[0] / ".env", override=True)
 
 
 @dataclass
@@ -18,7 +16,7 @@ class PipelineConfig:
     DEBUG: bool = field(default_factory=lambda: os.getenv("DEBUG", "false") == "true")
     LOAD_FROM_HUB: bool = field(default_factory=lambda: os.getenv("LOAD_FROM_HUB", "false") == "true")
 
-    DATA_DIR: Path = field(default_factory=_resolve_data_dir)
+    DATA_DIR: Path = field(default_factory=lambda: _MODULE_PATH / "data")
 
     INPUT_FILE: Path = field(init=False)
     OUTPUT_FILE: Path = field(init=False)

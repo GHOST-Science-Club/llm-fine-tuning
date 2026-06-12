@@ -39,7 +39,7 @@ class DataProcessingPipeline:
         try:
             # Check if input_source is a local file path or a HF Hub repo identifier
             if isinstance(self.input_source, Path) and self.input_source.suffix == '.jsonl':
-                dataset = load_dataset("json", data_files={"train": self.input_source}, split="train")
+                dataset = load_dataset("json", data_files={"train": str(self.input_source)}, split="train")
             elif isinstance(self.input_source, str):
                 dataset = load_dataset(self.input_source, split='train')
             else:
