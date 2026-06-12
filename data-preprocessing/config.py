@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 
 _MODULE_PATH = Path(__file__).resolve().parent
-load_dotenv(_MODULE_PATH.parents[0] / ".env", override=True)
+load_dotenv(_MODULE_PATH / ".env", override=True)
 
 
 @dataclass
