@@ -61,16 +61,16 @@ def save_dataset(
 
     raw = load_dataset("json", data_files=str(input_path), split="train")
     splits = raw.train_test_split(test_size=val_size, seed=seed)
-    dataset = DatasetDict({"train": splits["train"], "val": splits["test"]})
+    dataset = DatasetDict({"train": splits["train"], "validation": splits["test"]})
 
     if isinstance(output_destination, Path):
         dataset.save_to_disk(output_destination)
         print(f"Dataset saved locally in: {output_destination} "
-              f"(train={len(dataset['train'])}, val={len(dataset['val'])})")
+              f"(train={len(dataset['train'])}, validation={len(dataset['validation'])})")
     elif isinstance(output_destination, str):
         dataset.push_to_hub(output_destination)
         print(f"Dataset pushed to HF Hub: {output_destination} "
-              f"(train={len(dataset['train'])}, val={len(dataset['val'])})")
+              f"(train={len(dataset['train'])}, validation={len(dataset['validation'])})")
     else:
         raise ValueError("output_destination must be a local Path or a HF Hub repo id string.")
 
