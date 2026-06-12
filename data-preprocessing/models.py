@@ -16,10 +16,10 @@ class Category(str, Enum):
 
 class DataProcessingPipeline:
 
-    def __init__(self, input_source: Path | str , output_file: Path, dataset_dir: Path, checkpoint_file: Path, quiet: bool = False):
+    def __init__(self, input_source: Path | str, output_file: Path, dataset_destination: Path | str, checkpoint_file: Path, quiet: bool = False):
         self.input_source = input_source
         self.output_file = output_file
-        self.dataset_dir = dataset_dir
+        self.dataset_destination = dataset_destination
         self.checkpoint_file = checkpoint_file
         self.raw_data = []
         self.quiet = quiet
@@ -391,4 +391,4 @@ class DataProcessingPipeline:
         print("\n=== PIPELINE FINISHED ===")
         print(f"Results saved to: {self.output_file}")
         print("Pipeline Statistics:", json.dumps(self.stats, indent=2))
-        save_dataset(self.output_file, self.dataset_dir)
+        save_dataset(self.output_file, self.dataset_destination)

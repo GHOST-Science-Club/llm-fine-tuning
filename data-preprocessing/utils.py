@@ -2,7 +2,7 @@ from typing import Optional
 from pathlib import Path
 import requests
 from .config import config
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 
 def call_llm(system_prompt: str, user_prompt: str) -> str:
     """
@@ -49,22 +49,31 @@ def debug(stage: str, content: str) -> None:
 
 def save_dataset(
     input_file_path: str | Path,
-    output_path: Optional[str | Path] = None,
-    repo_id: Optional[str] = None
+    output_destination: str | Path,
+    val_size: float = 0.1,
+    seed: int = 42,
 ) -> None:
-    """Saves as hugging face dataset, optionally sets to HF Hub"""
+    """Saves HuggingFace dataset locally (Path) or pushes to HF Hub (str repo id), with train/val split."""
     input_path = Path(input_file_path)
     if not input_path.exists() or input_path.stat().st_size == 0:
         print(f"Skipping dataset save: {input_path} is empty or does not exist.")
         return
 
-    dataset = load_dataset("json", data_files=str(input_path), split="train")
+    raw = load_dataset("json", data_files=str(input_path), split="train")
+    splits = raw.train_test_split(test_size=val_size, seed=seed)
+    dataset = DatasetDict({"train": splits["train"], "val": splits["test"]})
 
-    if output_path:
-        dataset.save_to_disk(output_path)
-        print(f"Dataset saved locally successfully in: {output_path}")
+    if isinstance(output_destination, Path):
+        dataset.save_to_disk(output_destination)
+        print(f"Dataset saved locally in: {output_destination} "
+              f"(train={len(dataset['train'])}, val={len(dataset['val'])})")
+    elif isinstance(output_destination, str):
+        dataset.push_to_hub(output_destination)
+        print(f"Dataset pushed to HF Hub: {output_destination} "
+              f"(train={len(dataset['train'])}, val={len(dataset['val'])})")
+    else:
+        raise ValueError("output_destination must be a local Path or a HF Hub repo id string.")
 
-    if repo_id:
-         dataset.push_to_hub(repo_id)
-         print(f"Dataset saved successfully in HF Hub: {repo_id}")
+
+
 
