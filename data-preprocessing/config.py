@@ -29,6 +29,11 @@ class PipelineConfig:
     INPUT_SOURCE: str | Path = field(init=False)
     DATASET_DESTINATION: str | Path = field(init=False)
 
+    # Hyperparameters for LLM calls and dataset processing
+    TEMPERATURE: float = 0.2
+    REQUEST_TIMEOUT: int = 60
+    SEED: int = 42
+
     def __post_init__(self) -> None:
         self.INPUT_FILE = self.DATA_DIR / "input" / "forum_example_fixed.jsonl"
         self.OUTPUT_FILE = self.DATA_DIR / "output" / "pipeline_output.jsonl"

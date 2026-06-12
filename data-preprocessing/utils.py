@@ -20,13 +20,13 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.2,
+        "temperature": config.TEMPERATURE,
     }
     response = requests.post(
         config.BASE_URL,
         headers=headers,
         json=payload,
-        timeout=60,
+        timeout=config.REQUEST_TIMEOUT,
     )
 
     if config.DEBUG and response.status_code != 200:
@@ -51,7 +51,7 @@ def save_dataset(
     input_file_path: str | Path,
     output_destination: str | Path,
     val_size: float = 0.1,
-    seed: int = 42,
+    seed: int = config.SEED,
 ) -> None:
     """Saves HuggingFace dataset locally (Path) or pushes to HF Hub (str repo id), with train/val split."""
     input_path = Path(input_file_path)
