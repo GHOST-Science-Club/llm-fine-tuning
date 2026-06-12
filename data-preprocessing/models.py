@@ -57,8 +57,7 @@ class DataProcessingPipeline:
             debug("Loading data", f"Successfully loaded {len(loaded_records)} records.")
 
         except Exception as e:
-            print(f"Error: Failed to load dataset from {self.input_source}. Details: {e}")
-
+            raise RuntimeError(f"Failed to load dataset from {self.input_source}. Details: {e}")
     def _split_tasks(self, title: str, posts: list[dict]) -> list[dict]:
         """
         Helper method: Splits a thread into individual tasks/questions using an LLM.
@@ -392,7 +391,7 @@ class DataProcessingPipeline:
 
                                     if not self.quiet:
                                         print("    -> Rewriting answer...")
-                                    rewritten = self._rewrite_answer(question_clean, raw_answer)
+                                    rewritten = self._rewrite_answer(question_clean, raw_answer_clean)
 
                                     if not self.quiet:
                                         print("    -> Fixing solution LaTeX...")
