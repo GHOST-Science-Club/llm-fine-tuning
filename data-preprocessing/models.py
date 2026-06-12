@@ -349,7 +349,7 @@ class DataProcessingPipeline:
                         try:
                             if not self.quiet:
                                 print("    -> KEPT. Classifying question...")
-                            classification = self._classify_question(question)
+                            classification = self._classify_question(question_clean)
                             category = classification.get("category", None)
                             category_reason = classification.get("reason", "")
                         except Exception as e:
