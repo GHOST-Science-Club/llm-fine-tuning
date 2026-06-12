@@ -1,7 +1,7 @@
 from typing import Optional
 from pathlib import Path
 import requests
-from .config import  API_KEY, MODEL, BASE_URL, DEBUG
+from .config import config
 from datasets import load_dataset
 
 def call_llm(system_prompt: str, user_prompt: str) -> str:
@@ -11,11 +11,11 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
     """
 
     headers = {
-        "Authorization": f"Bearer {API_KEY}",
+        "Authorization": f"Bearer {config.API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": MODEL,
+        "model": config.MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -23,13 +23,13 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
         "temperature": 0.2,
     }
     response = requests.post(
-        BASE_URL,
+        config.BASE_URL,
         headers=headers,
         json=payload,
         timeout=60,
     )
 
-    if DEBUG and response.status_code != 200:
+    if config.DEBUG and response.status_code != 200:
         print(f"\n[API ERROR] Payload: {payload}")
         print(f"[API ERROR] Server response: {response.text}")
     response.raise_for_status()
@@ -37,7 +37,7 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
 
 def debug(stage: str, content: str) -> None:
     """Print a labelled debug block when DEBUG=true."""
-    if not DEBUG:
+    if not config.DEBUG:
         return
     sep = "─" * 60
     print(f"\n{sep}")
