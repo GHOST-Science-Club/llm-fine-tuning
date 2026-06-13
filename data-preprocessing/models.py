@@ -1,6 +1,10 @@
 import json
+from contextlib import ExitStack
 from enum import Enum
 from pathlib import Path
+
+from datasets import load_dataset
+
 from .utils import debug, call_llm, save_dataset
 from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM
 from .latex_utils import normalize_latex
@@ -11,12 +15,16 @@ class Category(str, Enum):
     PROOF = "PROOF"
     COMPLEX = "COMPLEX"
 
+# Fields that make up the clean, training-ready dataset (everything else is diagnostic).
+CLEAN_FIELDS = ("source_url", "question", "category", "solution")
+
 class DataProcessingPipeline:
 
-    def __init__(self, input_file: Path, output_file: Path, dataset_dir: Path, checkpoint_file: Path, quiet: bool = False):
-        self.input_file = input_file
+    def __init__(self, input_source: Path | str, output_file: Path, dataset_destination: Path | str, checkpoint_file: Path, log_file: Path | None = None, quiet: bool = False):
+        self.input_source = input_source
         self.output_file = output_file
-        self.dataset_dir = dataset_dir
+        self.log_file = log_file
+        self.dataset_destination = dataset_destination
         self.checkpoint_file = checkpoint_file
         self.raw_data = []
         self.quiet = quiet
@@ -28,26 +36,28 @@ class DataProcessingPipeline:
             "classification_errors": 0
         }
 
+
     def _load_data(self) -> None:
-        """Loading raw data."""
-        debug("Loading data", f"Starting to load data from file: {self.input_file}")
+        """Loading raw data from (HF Hub or local JSONL."""
+        debug("Loading data", f"Attempting to load dataset from: {self.input_source}")
 
-        with open(self.input_file, encoding="utf-8") as f:
-            for line_number, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
+        try:
+            # Check if input_source is a local file path or a HF Hub repo identifier
+            if isinstance(self.input_source, Path) and self.input_source.suffix == '.jsonl':
+                dataset = load_dataset("json", data_files={"train": str(self.input_source)}, split="train")
+            elif isinstance(self.input_source, str):
+                dataset = load_dataset(self.input_source, split='train')
+            else:
+                raise ValueError("Invalid input source. Must be a local JSONL file path or a Hugging Face Hub dataset identifier.")
 
-                try:
-                    thread = json.loads(line)
-                    self.raw_data.append(thread)
-                    self.stats["loaded"] += 1
+            loaded_records = dataset.to_list()
+            self.raw_data.extend(loaded_records)
+            self.stats["loaded"] += len(loaded_records)
 
-                except json.JSONDecodeError as e:
-                    print(f"Warning: JSON parsing error at line {line_number}. Skipping this record. Details: {e}")
+            debug("Loading data", f"Successfully loaded {len(loaded_records)} records.")
 
-        debug("Loading data", f"Successfully loaded {self.stats['loaded']} records.")
-
+        except Exception as e:
+            raise RuntimeError(f"Failed to load dataset from {self.input_source}. Details: {e}")
     def _split_tasks(self, title: str, posts: list[dict]) -> list[dict]:
         """
         Helper method: Splits a thread into individual tasks/questions using an LLM.
@@ -202,6 +212,40 @@ class DataProcessingPipeline:
         debug("STEP 4 — fix_latex_solution | corrected output", result)
         return result
 
+    @staticmethod
+    def _build_full_record(
+        url: str,
+        title: str,
+        question: str,
+        filt: dict,
+        category: "Category | str | None" = None,
+        category_reason: str | None = None,
+        raw_answer: str | None = None,
+        answer_post_index: int | None = None,
+        solution: str | None = None,
+    ) -> dict:
+        """
+        Build the full diagnostic record: question + all metadata, filtering and
+        classification results. Written to the local log file for inspection.
+        """
+        return {
+            "source_url": url,
+            "source_title": title,
+            "question": question,
+            "kept": filt["keep"],
+            "filter_reason": filt["reason"],
+            "category": category.value if isinstance(category, Category) else category,
+            "category_reason": category_reason,
+            "raw_answer": raw_answer,
+            "answer_post_index": answer_post_index,
+            "solution": solution,
+        }
+
+    @staticmethod
+    def _build_clean_record(full_record: dict) -> dict:
+        """Project a full record down to the clean, training-ready fields only."""
+        return {key: full_record[key] for key in CLEAN_FIELDS}
+
     def run(self) -> None:
         """
         Main pipeline method.
@@ -229,8 +273,12 @@ class DataProcessingPipeline:
             print(f"\nStarting to process {len(self.raw_data) - start_thread_idx} threads...")
             print(f"\nStarting from the {start_thread_idx} index")
 
-        # We open the file in write mode to stream results as they are ready
-        with open(self.output_file, file_mode, encoding="utf-8") as out_f:
+        # Stream results as they are ready: clean records → out_f, full diagnostic records → log_f.
+        # The log file is optional — when self.log_file is None, full records are simply not written.
+        # ExitStack closes whatever was opened (both files, or just out_f) even if the loop raises.
+        with ExitStack() as stack:
+            out_f = stack.enter_context(open(self.output_file, file_mode, encoding="utf-8"))
+            log_f = stack.enter_context(open(self.log_file, file_mode, encoding="utf-8")) if self.log_file else None
             for thread_idx, thread in enumerate(self.raw_data[start_thread_idx:], start=start_thread_idx):
                 if not self.quiet:
                     print(f"\n--- Thread {thread_idx}/{len(self.raw_data)} ---")
@@ -284,32 +332,26 @@ class DataProcessingPipeline:
                         print(f"Error while cleaning question! {e}")
                         continue
 
-                    # Initialize the record
-                    record = {
-                        "source_url": url,
-                        "source_title": title,
-                        "question": question_clean,
-                        "kept": filt["keep"],
-                        "filter_reason": filt["reason"],
-                        "category": None,
-                        "category_reason": None,
-                        "raw_answer": None,
-                        "answer_post_index": None,
-                        "solution": None,
-                    }
+                    # Accumulate fields as the task progresses through the steps.
+                    category = None
+                    category_reason = None
+                    raw_answer_clean = None
+                    answer_post_idx = None
+                    solution = None
+                    success = False
 
                     # Step A: Filter check
                     if not filt["keep"]:
                         if not self.quiet:
                             print(f"    -> DISCARDED: {filt['reason']}")
                         self.stats["filtered_out"] += 1
-                        out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                     else:
                         try:
                             if not self.quiet:
                                 print("    -> KEPT. Classifying question...")
-                            classification = self._classify_question(question)
+                            classification = self._classify_question(question_clean)
                             category = classification.get("category", None)
+                            category_reason = classification.get("reason", "")
                         except Exception as e:
                             print(f"Error while classifying question! {e}")
                             self.stats["classification_errors"] += 1
@@ -320,13 +362,10 @@ class DataProcessingPipeline:
                             if not self.quiet:
                                 print("    -> Invalid or missing category! Discarding.")
                             self.stats["filtered_out"] += 1
-                            out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                         else:
-                            # Unpack enum to string safely
-                            record["category"] = category.value if isinstance(category, Category) else category
-                            record["category_reason"] = classification.get("reason")
                             if not self.quiet:
-                                print(f"    -> Category found: {record['category']}, reason: {record['category_reason']}")
+                                cat_str = category.value if isinstance(category, Category) else category
+                                print(f"    -> Category found: {cat_str}, reason: {category_reason}")
                             try:
                                 if not self.quiet:
                                     print(f"    -> Finding answer (inline={has_inline})...")
@@ -344,30 +383,45 @@ class DataProcessingPipeline:
                                 if not self.quiet:
                                     print("    -> No answer found in thread. Discarding.")
                                 self.stats["filtered_out"] += 1
-                                out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
                             else:
                                 try:
                                     if not self.quiet:
                                         print("    -> Cleaning answer LaTeX...")
-                                    record["raw_answer"] = self._fix_latex_solution(normalize_latex(raw_answer))
-                                    record["answer_post_index"] = answer_post_idx
+                                    raw_answer_clean = self._fix_latex_solution(normalize_latex(raw_answer))
 
                                     if not self.quiet:
                                         print("    -> Rewriting answer...")
-                                    solution = self._rewrite_answer(question_clean, raw_answer)
+                                    rewritten = self._rewrite_answer(question_clean, raw_answer_clean)
 
                                     if not self.quiet:
                                         print("    -> Fixing solution LaTeX...")
-                                    record["solution"] = self._fix_latex_solution(solution)
+                                    solution = self._fix_latex_solution(rewritten)
 
                                     if not self.quiet:
                                         print("    -> SUCCESS! Task fully processed and kept.")
                                     self.stats["kept"] += 1
-
-                                    # Write final successful record to file
-                                    out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                                    success = True
                                 except Exception as e:
                                     print(f"Error during final rewriting/cleaning steps! {e}")
+
+                    # Build records once from the accumulated fields.
+                    # Full diagnostic record is always logged; the clean record only on success.
+                    full_record = self._build_full_record(
+                        url=url,
+                        title=title,
+                        question=question_clean,
+                        filt=filt,
+                        category=category,
+                        category_reason=category_reason,
+                        raw_answer=raw_answer_clean,
+                        answer_post_index=answer_post_idx,
+                        solution=solution,
+                    )
+                    if log_f:
+                        log_f.write(json.dumps(full_record, ensure_ascii=False) + "\n")
+                    if success:
+                        clean_record = self._build_clean_record(full_record)
+                        out_f.write(json.dumps(clean_record, ensure_ascii=False) + "\n")
 
                     try:
                         with open(self.checkpoint_file, "w", encoding="utf-8") as checkpoint_f:
@@ -383,6 +437,8 @@ class DataProcessingPipeline:
                     print("Warning! Checkpoint could not have been found!")
 
         print("\n=== PIPELINE FINISHED ===")
-        print(f"Results saved to: {self.output_file}")
+        print(f"Clean records saved to: {self.output_file}")
+        if self.log_file:
+            print(f"Full diagnostic logs saved to: {self.log_file}")
         print("Pipeline Statistics:", json.dumps(self.stats, indent=2))
-        save_dataset(self.output_file, self.dataset_dir)
+        save_dataset(self.output_file, self.dataset_destination)
