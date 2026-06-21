@@ -26,7 +26,7 @@ Configuration is read from a `.env` file at the module directory.
 | Variable          | Default                                       | Description                                                             |
 |-------------------|-----------------------------------------------|-------------------------------------------------------------------------|
 | `PCSS_API_KEY`    | *(empty)*                                     | Bearer token for the LLM API                                            |
-| `PCSS_BASE_URL`   | `https://llm.hpc.psnc.pl/v1/chat/completions` | OpenAI-compatible chat-completions endpoint                             |
+| `PCSS_BASE_URL`   | `https://llm.hpc.psnc.pl/v1` | OpenAI-compatible chat-completions endpoint                             |
 | `MODEL`           | `llama3.3:70b`                                | Model name sent in the request payload                                  |
 | `DEBUG`           | `false`                                       | `true` prints verbose per-step LLM input/output                         |
 | `LOAD_FROM_HUB`   | `false`                                       | `true` loads input from a HF Hub dataset instead of the local JSONL     |

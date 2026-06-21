@@ -11,7 +11,7 @@ load_dotenv(_MODULE_PATH / ".env", override=True)
 @dataclass
 class PipelineConfig:
     API_KEY: str = field(default_factory=lambda: os.getenv("PCSS_API_KEY", ""))
-    BASE_URL: str = field(default_factory=lambda: os.getenv("PCSS_BASE_URL", "https://llm.hpc.psnc.pl/v1/chat/completions"))
+    BASE_URL: str = field(default_factory=lambda: os.getenv("PCSS_BASE_URL", "https://llm.hpc.psnc.pl/v1"))
     MODEL: str = field(default_factory=lambda: os.getenv("MODEL", "llama3.3:70b"))
     DEBUG: bool = field(default_factory=lambda: os.getenv("DEBUG", "false") == "true")
     load_from_hub: bool = field(default_factory=lambda: os.getenv("LOAD_FROM_HUB", "false") == "true")
