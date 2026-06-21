@@ -10,8 +10,8 @@ load_dotenv(_MODULE_PATH / ".env", override=True)
 
 @dataclass
 class PipelineConfig:
-    API_KEY: str = field(default_factory=lambda: os.getenv("PCSS_API_KEY", ""))
-    BASE_URL: str = field(default_factory=lambda: os.getenv("PCSS_BASE_URL", "https://llm.hpc.psnc.pl/v1"))
+    API_KEY: str = field(default_factory=lambda: os.getenv("API_KEY", ""))
+    BASE_URL: str = field(default_factory=lambda: os.getenv("API_BASE_URL", "https://llm.hpc.psnc.pl/v1"))
     MODEL: str = field(default_factory=lambda: os.getenv("MODEL", "llama3.3:70b"))
     DEBUG: bool = field(default_factory=lambda: os.getenv("DEBUG", "false") == "true")
     load_from_hub: bool = field(default_factory=lambda: os.getenv("LOAD_FROM_HUB", "false") == "true")
@@ -35,8 +35,13 @@ class PipelineConfig:
     SEED: int = 42
     # Max number of concurrent in-flight LLM requests (asyncio semaphore bound).
     MAX_CONCURRENCY: int = field(default_factory=lambda: int(os.getenv("MAX_CONCURRENCY", "8")))
+    # How many threads are processed per concurrent batch. Checkpoint is written
+    # after each batch completes. 0 → defaults to 2 * MAX_CONCURRENCY in __post_init__.
+    BATCH_SIZE: int = field(default_factory=lambda: int(os.getenv("BATCH_SIZE", "0")))
 
     def __post_init__(self) -> None:
+        if self.BATCH_SIZE <= 0:
+            self.BATCH_SIZE = 2 * self.MAX_CONCURRENCY
         self.INPUT_FILE = self.data_dir / "input" / "forum_example_fixed.jsonl"
         self.OUTPUT_FILE = self.data_dir / "output" / "pipeline_output.jsonl"
         self.LOG_FILE = self.data_dir / "logs" / "pipeline_logs.jsonl" if self.save_logs else None
