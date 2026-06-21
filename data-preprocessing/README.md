@@ -23,15 +23,16 @@ pip install -r data-preprocessing/requirements.txt
 
 Configuration is read from a `.env` file at the module directory.
 
-| Variable | Default | Description |
-|---|---|---|
-| `PCSS_API_KEY` | *(empty)* | Bearer token for the LLM API |
-| `PCSS_BASE_URL` | `https://llm.hpc.psnc.pl/v1/chat/completions` | OpenAI-compatible chat-completions endpoint |
-| `MODEL` | `llama3.3:70b` | Model name sent in the request payload |
-| `DEBUG` | `false` | `true` prints verbose per-step LLM input/output |
-| `LOAD_FROM_HUB` | `false` | `true` loads input from a HF Hub dataset instead of the local JSONL |
-| `PUSH_TO_HUB` | `false` | `true` pushes the clean dataset to the HF Hub instead of saving locally |
-| `SAVE_LOGS` | `true` | `false` disables the diagnostic log file entirely |
+| Variable          | Default                                       | Description                                                             |
+|-------------------|-----------------------------------------------|-------------------------------------------------------------------------|
+| `PCSS_API_KEY`    | *(empty)*                                     | Bearer token for the LLM API                                            |
+| `PCSS_BASE_URL`   | `https://llm.hpc.psnc.pl/v1/chat/completions` | OpenAI-compatible chat-completions endpoint                             |
+| `MODEL`           | `llama3.3:70b`                                | Model name sent in the request payload                                  |
+| `DEBUG`           | `false`                                       | `true` prints verbose per-step LLM input/output                         |
+| `LOAD_FROM_HUB`   | `false`                                       | `true` loads input from a HF Hub dataset instead of the local JSONL     |
+| `PUSH_TO_HUB`     | `false`                                       | `true` pushes the clean dataset to the HF Hub instead of saving locally |
+| `SAVE_LOGS`       | `true`                                        | `false` disables the diagnostic log file entirely                       |
+| `MAX_CONCURRENCY` | `5`                                           | Maximum number of concurrent requests to the LLM API                    |
 
 > If you push to the Hub (`PUSH_TO_HUB=true`) or load a gated dataset (`LOAD_FROM_HUB=true`), make sure you are logged in (`huggingface-cli login`) or have `HF_TOKEN` set in your environment.
 

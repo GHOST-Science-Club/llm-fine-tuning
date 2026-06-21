@@ -1,39 +1,58 @@
-from typing import Optional
+import asyncio
 from pathlib import Path
-import requests
-from .config import config
+from openai import AsyncOpenAI, APIError
+from .config import config, PipelineConfig
 from datasets import load_dataset, DatasetDict
 
-def call_llm(system_prompt: str, user_prompt: str) -> str:
+
+class LLMClient:
     """
-    Call the LLM API (OpenAI-compatible).
-    Swap BASE_URL / auth headers here when moving to PCSS.
+    Async wrapper around an OpenAI-compatible endpoint (e.g. vLLM).
+
+    Owns a single AsyncOpenAI client (shared connection pool) and a semaphore
+    that caps the number of concurrent in-flight requests. Use as an async
+    context manager so the underlying HTTP client is always closed:
     """
 
-    headers = {
-        "Authorization": f"Bearer {config.API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": config.MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": config.TEMPERATURE,
-    }
-    response = requests.post(
-        config.BASE_URL,
-        headers=headers,
-        json=payload,
-        timeout=config.REQUEST_TIMEOUT,
-    )
+    def __init__(self, config: PipelineConfig):
+        self._cfg = config
+        self._sem = asyncio.Semaphore(config.MAX_CONCURRENCY)
 
-    if config.DEBUG and response.status_code != 200:
-        print(f"\n[API ERROR] Payload: {payload}")
-        print(f"[API ERROR] Server response: {response.text}")
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"].strip()
+
+        self._client = AsyncOpenAI(
+            api_key=config.API_KEY,
+            base_url=config.BASE_URL,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+
+    async def call(self, system_prompt: str, user_prompt: str) -> str:
+        """Call the LLM asynchronously, respecting the concurrency limit."""
+        async with self._sem:
+            try:
+                response = await self._client.chat.completions.create(
+                    model=self._cfg.MODEL,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=self._cfg.TEMPERATURE,
+                )
+            except APIError as e:
+                if self._cfg.DEBUG:
+                    print(f"\n[API ERROR] model={self._cfg.MODEL}")
+                    print(f"[API ERROR] {e}")
+                raise
+
+        return response.choices[0].message.content.strip()
+
+    async def aclose(self) -> None:
+        await self._client.close()
+
+    async def __aenter__(self) -> "LLMClient":
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        await self.aclose()
 
 def debug(stage: str, content: str) -> None:
     """Print a labelled debug block when DEBUG=true."""

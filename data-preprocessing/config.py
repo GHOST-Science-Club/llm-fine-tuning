@@ -33,6 +33,8 @@ class PipelineConfig:
     TEMPERATURE: float = 0.2
     REQUEST_TIMEOUT: int = 60
     SEED: int = 42
+    # Max number of concurrent in-flight LLM requests (asyncio semaphore bound).
+    MAX_CONCURRENCY: int = field(default_factory=lambda: int(os.getenv("MAX_CONCURRENCY", "8")))
 
     def __post_init__(self) -> None:
         self.INPUT_FILE = self.data_dir / "input" / "forum_example_fixed.jsonl"
