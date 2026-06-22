@@ -87,7 +87,7 @@ class DataProcessingPipeline:
 
         except (json.JSONDecodeError, KeyError):
             debug("STEP 0 — split_tasks | JSON parse failed, using fallback", raw)
-            self.stats["llm_parse_errors"] = self.stats.get("llm_parse_errors", 0) + 1
+            self.stats["llm_parse_errors"] +=  1
 
         return [{
             "question": posts[0]["content"] if posts else title,
@@ -139,7 +139,7 @@ class DataProcessingPipeline:
             category = Category(category_str)
         except ValueError:
             category = None
-            self.stats["classification_errors"] = self.stats.get("classification_errors", 0) + 1
+            self.stats["classification_errors"] += 1
             debug("STEP 2", f"WARNING: Invalid category from LLM: {category_str}")
 
         return {"category": category, "reason": reason}
@@ -207,12 +207,12 @@ class DataProcessingPipeline:
         debug("STEP 3 — rewrite_answer | full rewritten solution", result)
         return result
 
-    async def _fix_latex_solution(self, solution: str) -> str:
-        """Final LLM pass to catch any remaining LaTeX syntax errors in the solution."""
-        result = (await self.llm.call(FIX_LATEX_SYSTEM, solution)).strip()
+    async def _fix_latex(self, text: str) -> str:
+        """LLM pass to catch any remaining LaTeX syntax errors in the given text."""
+        result = (await self.llm.call(FIX_LATEX_SYSTEM, text)).strip()
         # Strip markdown code fences in case the model wraps its output
         result = result.removeprefix('```latex').removeprefix('```').removesuffix('```').strip()
-        debug("STEP 4 — fix_latex_solution | corrected output", result)
+        debug("STEP 4 — fix_latex | corrected output", result)
         return result
 
     @staticmethod
@@ -268,18 +268,21 @@ class DataProcessingPipeline:
             has_inline = task.get("has_inline_solution", False)
         except (KeyError, TypeError, AttributeError) as e:
             print(f"  {label} -> DISCARDED: Distorted task structure from LLM. Skipping... ({e})")
-            self.stats["llm_parse_errors"] = self.stats.get("llm_parse_errors", 0) + 1
+            self.stats["llm_parse_errors"]+=  1
             return None, None
 
         relevant_posts = [p for p in posts if p["index"] in relevant_indices]
         try:
             filt = await self._filter_question(question, relevant_posts)
         except Exception as e:
+
+            self.stats["llm_parse_errors"] +=  1
             print(f"  {label} Error while filtering question! {e}")
             return None, None
         try:
-            question_clean = await self._fix_latex_solution(question)
+            question_clean = await self._fix_latex(question)
         except Exception as e:
+            self.stats["llm_parse_errors"] += 1
             print(f"  {label} Error while cleaning question! {e}")
             return None, None
 
@@ -328,9 +331,9 @@ class DataProcessingPipeline:
                     self.stats["filtered_out"] += 1
                 else:
                     try:
-                        raw_answer_clean = await self._fix_latex_solution(normalize_latex(raw_answer))
+                        raw_answer_clean = await self._fix_latex(normalize_latex(raw_answer))
                         rewritten = await self._rewrite_answer(question_clean, raw_answer_clean)
-                        solution = await self._fix_latex_solution(rewritten)
+                        solution = await self._fix_latex(rewritten)
                         self.stats["kept"] += 1
                         success = True
                         if not self.quiet:
@@ -389,7 +392,7 @@ class DataProcessingPipeline:
         for r in results:
             if isinstance(r, Exception):
                 print(f"Unexpected error processing a task in thread {thread_idx}: {r}")
-                self.stats["llm_parse_errors"] = self.stats.get("llm_parse_errors", 0) + 1
+                self.stats["llm_parse_errors"] += 1
                 continue
             records.append(r)
         return records
