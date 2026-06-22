@@ -23,6 +23,7 @@ class LLMClient:
             api_key=config.API_KEY,
             base_url=config.BASE_URL,
             timeout=config.REQUEST_TIMEOUT,
+            max_retries=3
         )
 
     async def call(self, system_prompt: str, user_prompt: str) -> str:
