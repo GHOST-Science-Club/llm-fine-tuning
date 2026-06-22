@@ -43,7 +43,14 @@ class LLMClient:
                     print(f"[API ERROR] {e}")
                 raise
 
-        return response.choices[0].message.content.strip()
+        if not response.choices:
+            raise ValueError(f"LLM returned no choices (model={self._cfg.MODEL})")
+
+        content = response.choices[0].message.content
+        if content is None:
+            raise ValueError(f"LLM returned empty content (model={self._cfg.MODEL})")
+
+        return content.strip()
 
     async def aclose(self) -> None:
         await self._client.close()
