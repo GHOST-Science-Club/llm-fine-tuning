@@ -23,15 +23,17 @@ pip install -r data-preprocessing/requirements.txt
 
 Configuration is read from a `.env` file at the module directory.
 
-| Variable | Default | Description |
-|---|---|---|
-| `PCSS_API_KEY` | *(empty)* | Bearer token for the LLM API |
-| `PCSS_BASE_URL` | `https://llm.hpc.psnc.pl/v1/chat/completions` | OpenAI-compatible chat-completions endpoint |
-| `MODEL` | `llama3.3:70b` | Model name sent in the request payload |
-| `DEBUG` | `false` | `true` prints verbose per-step LLM input/output |
-| `LOAD_FROM_HUB` | `false` | `true` loads input from a HF Hub dataset instead of the local JSONL |
-| `PUSH_TO_HUB` | `false` | `true` pushes the clean dataset to the HF Hub instead of saving locally |
-| `SAVE_LOGS` | `true` | `false` disables the diagnostic log file entirely |
+| Variable          | Default                                       | Description                                                             |
+|-------------------|-----------------------------------------------|-------------------------------------------------------------------------|
+| `API_KEY`         | *(empty)*                                     | Bearer token for the LLM API                                            |
+| `API_BASE_URL`    | `https://llm.hpc.psnc.pl/v1` | OpenAI-compatible base URL (the SDK appends `/chat/completions`)         |
+| `MODEL`           | `llama3.3:70b`                                | Model name sent in the request payload                                  |
+| `DEBUG`           | `false`                                       | `true` prints verbose per-step LLM input/output                         |
+| `LOAD_FROM_HUB`   | `false`                                       | `true` loads input from a HF Hub dataset instead of the local JSONL     |
+| `PUSH_TO_HUB`     | `false`                                       | `true` pushes the clean dataset to the HF Hub instead of saving locally |
+| `SAVE_LOGS`       | `true`                                        | `false` disables the diagnostic log file entirely                       |
+| `MAX_CONCURRENCY` | `5`                                           | Maximum number of concurrent in-flight requests to the LLM API          |
+| `BATCH_SIZE`      | `2 × MAX_CONCURRENCY`                         | Threads processed per concurrent batch; checkpoint is written per batch |
 
 > If you push to the Hub (`PUSH_TO_HUB=true`) or load a gated dataset (`LOAD_FROM_HUB=true`), make sure you are logged in (`huggingface-cli login`) or have `HF_TOKEN` set in your environment.
 
@@ -71,9 +73,15 @@ Each thread flows through the following steps, one LLM call per step per task:
 
 A task only reaches the clean dataset if it survives all checks (kept → valid category → answer found → rewritten successfully). Every task — including discarded ones — is written to the diagnostic log with the reason.
 
+### Concurrency
+
+The pipeline runs on `asyncio`. Threads are processed in **concurrent batches** of `BATCH_SIZE`, and within each thread its tasks run concurrently too. The steps *inside* a single task stay sequential (each depends on the previous one). All LLM calls go through a shared async client whose semaphore caps the number of in-flight requests at `MAX_CONCURRENCY`, regardless of how many tasks are queued.
+
+Because many threads run at once, per-step console logs interleave — use `--quiet` for clean output, and keep `DEBUG=false` on real runs.
+
 ### Checkpointing
 
-Progress is saved to `data/checkpoint/checkpoint.txt` as `thread_idx:task_idx`. If a run is interrupted, restarting resumes from the last checkpoint and appends to the existing output files. Delete the checkpoint file to start fresh.
+Progress is saved to `data/checkpoint/checkpoint.txt` as `next_thread_idx:0`. The checkpoint advances only after a whole batch finishes, so resuming restarts at a batch boundary and never re-emits already-written records. Restarting resumes from the checkpoint and appends to the existing output files. Delete the checkpoint file to start fresh.
 
 ---
 
@@ -111,7 +119,7 @@ data-preprocessing/
 ├── models.py          # DataProcessingPipeline — orchestration + record building
 ├── prompts.py         # LLM system prompts (few-shot, structured outputs)
 ├── latex_utils.py     # Rule-based normalize_latex() preprocessing
-├── utils.py           # call_llm(), debug(), save_dataset() (train/val split + save/push)
+├── utils.py           # LLMClient (async vLLM/OpenAI-compatible), debug(), save_dataset()
 ├── config.py          # PipelineConfig dataclass — paths, env vars, flags
 ├── requirements.txt   # Python dependencies
 └── data/
