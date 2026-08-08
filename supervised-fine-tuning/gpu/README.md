@@ -27,6 +27,7 @@ cp .env.example .env
 |---|---|---|
 | `GRANT` | **yes** | Your HPC grant ID (e.g. `pl0966-02`) — used to build the project path |
 | `HF_TOKEN` | yes | HuggingFace token with Write + repo-create permissions |
+| `HF_USER` | yes (if `PUSH_TO_HUB=true`) | Your HF username — checkpoints push to `HF_USER/<project-run-name>`. No default; training fails fast at startup if unset while pushing is enabled |
 | `WANDB_API_KEY` | yes (if logging) | W&B API key |
 | `PUSH_TO_HUB` | no | `true` to push checkpoints to HF Hub during training |
 | `LOG_TO_WANDB` | no | `true` to enable W&B logging |
