@@ -7,7 +7,7 @@ from pathlib import Path
 from datasets import load_dataset
 
 from .utils import debug, save_dataset, LLMClient
-from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM
+from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM, GRADE_SYSTEM
 from .latex_utils import normalize_latex
 
 class Category(str, Enum):
@@ -17,7 +17,18 @@ class Category(str, Enum):
     COMPLEX = "COMPLEX"
 
 # Fields that make up the clean, training-ready dataset (everything else is diagnostic).
-CLEAN_FIELDS = ("source_url", "question", "category", "solution")
+# final_answer is a standalone, self-contained value (no "Krok N:" labels, no LaTeX display
+# wrappers) extracted by the grading step — usable directly as GRPO reward ground truth
+# without having to re-parse it out of the free-text `solution`.
+CLEAN_FIELDS = ("source_url", "question", "category", "solution", "final_answer")
+
+# Word-overlap (Jaccard) ratio above which a "found answer" is treated as just the
+# question restated rather than a real solution, and discarded. Calibrated against
+# synthetic cases: a real derivation scores ~0.1-0.4 even when it opens by restating
+# the problem, while a duplicate/near-duplicate post scores 0.75-1.0 — 0.85 sits in
+# the gap with margin on both sides. (A first guess of 0.6 turned out to sit inside
+# the legitimate-answer range and would have false-positived — don't reuse that value.)
+ANSWER_OVERLAP_THRESHOLD = 0.85
 
 class DataProcessingPipeline:
 
@@ -36,7 +47,10 @@ class DataProcessingPipeline:
             "filtered_out": 0,
             "kept": 0,
             "llm_parse_errors": 0,
-            "classification_errors": 0
+            "classification_errors": 0,
+            "answer_looks_like_question": 0,
+            "verbose_solutions": 0,
+            "failed_grading": 0
         }
 
 
@@ -207,6 +221,32 @@ class DataProcessingPipeline:
         debug("STEP 3 — rewrite_answer | full rewritten solution", result)
         return result
 
+    async def _grade_solution(self, question: str, solution: str) -> dict:
+        """
+        Final quality gate: does `solution` actually, correctly, and completely answer
+        `question`? Also extracts the final answer in the same call
+        Returns {"valid": bool, "reason": str, "final_answer": str | None}.
+        """
+        user_prompt = f"Problem: {question[:1000]}\n\nSolution: {solution[:2000]}"
+        raw = await self.llm.call(GRADE_SYSTEM, user_prompt)
+        debug("STEP 5 — grade_solution | raw LLM output", raw)
+
+        valid = True
+        reason = ""
+        final_answer = None
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("VERDICT:"):
+                valid = "VALID" in line.upper() and "INVALID" not in line.upper()
+            elif line.startswith("REASON:"):
+                reason = line.split(":", 1)[1].strip()
+            elif line.startswith("FINAL_ANSWER:"):
+                answer = line.split(":", 1)[1].strip()
+                final_answer = None if answer.upper() == "NONE" else answer
+
+        debug("STEP 5 — grade_solution | parsed result", f"valid={valid}  reason={reason}  final_answer={final_answer}")
+        return {"valid": valid, "reason": reason, "final_answer": final_answer}
+
     async def _fix_latex(self, text: str) -> str:
         """LLM pass to catch any remaining LaTeX syntax errors in the given text."""
         result = (await self.llm.call(FIX_LATEX_SYSTEM, text)).strip()
@@ -226,6 +266,8 @@ class DataProcessingPipeline:
         raw_answer: str | None = None,
         answer_post_index: int | None = None,
         solution: str | None = None,
+        grading_reason: str | None = None,
+        final_answer: str | None = None,
     ) -> dict:
         """
         Build the full diagnostic record: question + all metadata, filtering and
@@ -241,13 +283,23 @@ class DataProcessingPipeline:
             "category_reason": category_reason,
             "raw_answer": raw_answer,
             "answer_post_index": answer_post_index,
+            "grading_reason": grading_reason,
             "solution": solution,
+            "final_answer": final_answer,
         }
 
     @staticmethod
     def _build_clean_record(full_record: dict) -> dict:
         """Project a full record down to the clean, training-ready fields only."""
         return {key: full_record[key] for key in CLEAN_FIELDS}
+
+    @staticmethod
+    def _token_overlap(a: str, b: str) -> float:
+        """Word-level Jaccard similarity, used to catch a 'found answer' that's really just the question restated."""
+        ta, tb = set(a.lower().split()), set(b.lower().split())
+        if not ta or not tb:
+            return 0.0
+        return len(ta & tb) / len(ta | tb)
 
     async def _process_task(self, task: dict, posts: list[dict], url: str, title: str,
                             label: str) -> tuple[dict | None, dict | None]:
@@ -292,6 +344,8 @@ class DataProcessingPipeline:
         raw_answer_clean = None
         answer_post_idx = None
         solution = None
+        grading_reason = None
+        final_answer = None
         success = False
 
         # Step A: Filter check
@@ -329,17 +383,38 @@ class DataProcessingPipeline:
                     if not self.quiet:
                         print(f"  {label} -> No answer found in thread. Discarding.")
                     self.stats["filtered_out"] += 1
+                elif self._token_overlap(question, raw_answer) >= ANSWER_OVERLAP_THRESHOLD:
+                    if not self.quiet:
+                        print(f"  {label} -> Picked answer looks like a restated question, not a real solution. Discarding.")
+                    self.stats["filtered_out"] += 1
+                    self.stats["answer_looks_like_question"] += 1
                 else:
                     try:
                         raw_answer_clean = await self._fix_latex(normalize_latex(raw_answer))
                         rewritten = await self._rewrite_answer(question_clean, raw_answer_clean)
                         solution = await self._fix_latex(rewritten)
-                        self.stats["kept"] += 1
-                        success = True
-                        if not self.quiet:
-                            print(f"  {label} -> SUCCESS! Task fully processed and kept.")
+                        if(len(solution) > 3*len(raw_answer_clean) and len(solution) > 500):
+                            if not self.quiet:
+                                print(f"  {label} -> WARNING: Rewritten solution is at least twice as long as raw answer. Check for verbosity.")
+                            self.stats["verbose_solutions"] += 1
+
+                        # Step D: Grading check — does the solution actually answer this question?
+                        grading = await self._grade_solution(question_clean, solution)
+                        grading_reason = grading["reason"]
+                        final_answer = grading["final_answer"]
+
+                        if not grading["valid"]:
+                            if not self.quiet:
+                                print(f"  {label} -> Solution failed grading: {grading_reason}. Discarding.")
+                            self.stats["filtered_out"] += 1
+                            self.stats["failed_grading"] += 1
+                        else:
+                            self.stats["kept"] += 1
+                            success = True
+                            if not self.quiet:
+                                print(f"  {label} -> SUCCESS! Task fully processed and kept.")
                     except Exception as e:
-                        print(f"  {label} Error during final rewriting/cleaning steps! {e}")
+                        print(f"  {label} Error during final rewriting/cleaning/grading steps! {e}")
 
         # Full diagnostic record is always returned; the clean record only on success.
         full_record = self._build_full_record(
@@ -352,6 +427,8 @@ class DataProcessingPipeline:
             raw_answer=raw_answer_clean,
             answer_post_index=answer_post_idx,
             solution=solution,
+            grading_reason=grading_reason,
+            final_answer=final_answer,
         )
         clean_record = self._build_clean_record(full_record) if success else None
         return full_record, clean_record
@@ -390,7 +467,7 @@ class DataProcessingPipeline:
 
         records: list[tuple[dict | None, dict | None]] = []
         for r in results:
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 print(f"Unexpected error processing a task in thread {thread_idx}: {r}")
                 self.stats["llm_parse_errors"] += 1
                 continue
@@ -448,7 +525,7 @@ class DataProcessingPipeline:
 
                 # Write the whole batch in thread order, then advance the checkpoint.
                 for idx, tr in zip(range(batch_start, batch_end), thread_results):
-                    if isinstance(tr, Exception):
+                    if isinstance(tr, BaseException):
                         print(f"Unexpected error processing thread {idx}: {tr}")
                         continue
                     for full_record, clean_record in tr:

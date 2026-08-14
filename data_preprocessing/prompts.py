@@ -14,10 +14,10 @@ IMPORTANT rules:
 - When multiple examples live in one post (index N), set post_indices to [N] for each of them
   (plus any later posts that specifically discuss that example).
 - If the post walks through the full solution immediately after the problem statement,
-  set has_inline_solution to true.
+  set has_inline_solution to true. The full solution requires all steps to be shown and the final answer to be clearly stated.
 - If the thread has only one problem, return a single-element array.
 
---- Example A: numbered examples inside one tutorial post ---
+--- Example 1: numbered examples inside one tutorial post ---
 Thread title: "Sprzężenie – liczenie granic"
 Posts:
   [0] author: nauczyciel — "\\text{Przykład 1} \\lim_{n\\to\\infty}(\\sqrt{n^2+2n}-n) \\text{ ...pełne rozwiązanie... Przykład 2} a_n = n^3-\\sqrt{n^6-5n^3} \\text{ ...pełne rozwiązanie...}"
@@ -36,7 +36,7 @@ Output:
   }
 ]
 
---- Example B: Q&A thread with one problem and discussion replies ---
+--- Example 2: Q&A thread with one problem and discussion replies ---
 Thread title: "Ciekawy iloczyn"
 Posts:
   [0] author: mol_ksiazkowy — "\\text{Udowodnić, że } f(m)= \\frac{2}{3} (-1)^{m+1} m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}"
@@ -50,6 +50,20 @@ Output:
     "post_indices": [0, 1, 2],
     "has_inline_solution": false
   }
+]
+
+--- Example 3: Q&A thread with one problem and no satisfactory answer ---
+Thread title: "Rozwiązać równanie kwadratowe"
+Posts:
+    [0] author: azanus111 — "\\text{Dostałem takie zadanie: } \\text{Rozwiązać równanie kwadratowe } x^2-4x+3=0 \\text{ w liczbach rzeczywistych.} \\text{Wydaje mi się, że } x=-1 \\text{ i } x=3 \\text{ są rozwiązaniami.}"
+
+Output:
+[
+    {
+        "question": "\\text{Rozwiązać równanie kwadratowe } x^2-4x+3=0 \\text{ w liczbach rzeczywistych.}",
+        "post_indices": [0],
+        "has_inline_solution": false
+    }
 ]
 """
 
@@ -164,30 +178,66 @@ REASON: The solution to this linear equation is a single specific number (x=4).
 """
 
 REWRITE_SYSTEM = """\
-You are formatting a math forum answer into numbered steps. \
-Your ONLY job is to split the answer into steps and fix LaTeX syntax. \
-Do NOT add, remove, or change any mathematical content.
+You are formatting a math forum answer into clear, well-explained numbered steps for a \
+student-facing dataset. Split the answer into steps, fix LaTeX syntax, and add a brief \
+explanation of WHY each step follows from the previous one.
 
 Rules:
 - Split the answer into numbered steps: "Krok 1:", "Krok 2:", etc.
-- Each step = one logical sentence or one formula from the original
-- Copy all text and formulas EXACTLY — do not paraphrase, do not add explanations
-- Fix LaTeX syntax only: use $...$ for inline math, \\[ ... \\] for display math
+- Each step = one formula or logical move from the original, followed by a short phrase \
+  naming the technique or reason (e.g. "z tożsamości sumy do iloczynu", "podnosząc obie \
+  strony do kwadratu", "ponieważ funkcja jest parzysta")
+- Do NOT invent new mathematical content: no new values, claims, sub-results, or facts that \
+  are not already present in or directly implied by the original answer. You may only \
+  explain WHY a step the original already takes is valid — never introduce a step, number, \
+  or formula the original didn't have. If the original has little content, keep the rewrite \
+  equally minimal rather than padding it out.
+- Copy all formulas EXACTLY — do not alter the math itself, only add connecting explanation
+- Fix LaTeX syntax: use $...$ for inline math, \\[ ... \\] for display math
 - End with \\textbf{Wynik:} and the final result in \\[ ... \\]
 - If the original has no final numeric result, skip \\textbf{Wynik:}
 
---- Example ---
+--- Example 1: explained derivation ---
 Raw answer:
   "\\text{Niech } a=\\sqrt{n^2+2n-1} \\text{, } b=n \\text{, korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b} \\text{, liczymy i wychodzi 1}"
 
 Rewritten:
 
-Krok 1: Niech $a=\\sqrt{n^2+2n-1}$, $b=n$, korzystamy ze wzoru $a-b=\\frac{a^2-b^2}{a+b}$.
+Krok 1: Niech $a=\\sqrt{n^2+2n-1}$, $b=n$ — wprowadzamy te oznaczenia, żeby zapisać wyrażenie jako różnicę pierwiastków.
 
-Krok 2: Liczymy i wychodzi 1.
+Krok 2: Korzystamy ze wzoru $a-b=\\frac{a^2-b^2}{a+b}$, który pozwala usunąć niewymierność w liczniku.
+
+Krok 3: Podstawiając i licząc, wychodzi 1.
 
 \\textbf{Wynik:}
 \\[ \\lim_{n \\to \\infty}(\\sqrt{n^2+2n-1}-n) = 1 \\]
+
+--- Example 2: explained derivation ---
+Raw answer:
+  "\\text{Rzucamy kostką 3 razy, niech } P(\\text{suma}=10)= \\frac{27}{216} \\text{, po skróceniu } \\frac{1}{8}"
+
+Rewritten:
+
+Krok 1: Rzucamy kostką 3 razy — mamy $6^3=216$ jednakowo prawdopodobnych wyników.
+
+Krok 2: $P(\\text{suma}=10)=\\frac{27}{216}$, bo tyle jest trójek wyników dających sumę 10; po skróceniu $\\frac{1}{8}$.
+
+\\textbf{Wynik:}
+\\[ P(\\text{suma}=10) = \\frac{1}{8} \\]
+
+--- Example 3: raw answer has no real derivation — do NOT invent explanations for steps that aren't there ---
+Raw answer:
+  "\\text{Niech } f(m)=\\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3} \\text{, udowodnić, że } f(m)=\\frac{2}{3}(-1)^{m+1} m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}"
+
+Rewritten:
+Krok 1: Niech $f(m)=\\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3}$.
+Krok 2: Udowodnić, że $f(m)=\\frac{2}{3}(-1)^{m+1} m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}$.
+
+(No explanation added — the raw answer is just a restated definition/claim, not an actual \
+derivation, so there is nothing real to explain. Do not fabricate reasoning to fill the gap.)
+
+IMPORTANT: The examples above only illustrate the transformation pattern. Never repeat, \
+reference, or reuse their content — rewrite ONLY the raw answer given to you in this turn.
 """
 
 FIND_ANSWER_SYSTEM = """\
@@ -198,6 +248,10 @@ Rules:
 - If the post that states the problem ALSO contains a full worked solution \
   (e.g. a tutorial post with "Przykład N … solution …"), extract that solution \
   directly from the problem post.
+- IMPORTANT: has_inline_solution = true is only a hint from a previous step. \
+  You must still read the post and verify that it contains a full solution meaning \
+  all steps are shown and the final answer is clearly stated. When in doubt,
+  assume the solution is incomplete and look for a better answer in the replies.
 - Otherwise, look through the reply posts and pick the one with the most \
   complete and mathematically correct solution.
 - Ignore posts that are pure meta-discussion (corrections about notation, arguments \
@@ -207,14 +261,14 @@ Rules:
 Return ONE line only:
 POST_INDEX: <integer index of the post that contains the best answer>
 
---- Example A: inline solution in the problem post (tutorial thread) ---
+--- Example 1: inline solution in the problem post (tutorial thread) ---
 Problem: \\lim_{n\\to\\infty}(\\sqrt{n^2+2n}-n)
 Posts:
   [0] nauczyciel (contains_images=False): "\\text{Przykład 1} \\lim_{n\\to\\infty}(\\sqrt{n^2+2n}-n) \\text{ Niech } a=\\sqrt{n^2+2n} \\text{, } b=n \\text{. Korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b} \\text{:} =\\lim_{n\\to\\infty}\\frac{n^2+2n-n^2}{\\sqrt{n^2+2n}+n}=\\lim_{n\\to\\infty}\\frac{2n}{\\sqrt{n^2+2n}+n} \\text{ Dzielimy przez } n \\text{: } =\\frac{2}{\\sqrt{1+2/n}+1}\\to\\frac{2}{2}=1"
 
 POST_INDEX: 0
 
---- Example B: answer in a reply post (Q&A thread) ---
+--- Example 2: answer in a reply post (Q&A thread) ---
 Problem: \\text{Udowodnić, że } f(m)= \\frac{2}{3}(-1)^{m+1}m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}
 Posts:
   [0] mol_ksiazkowy (contains_images=False): "\\text{Niech } f(m)= \\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3} \\text{ Udowodnić, że ...}"
@@ -222,6 +276,74 @@ Posts:
   [2] Jan Kraszewski (contains_images=False): "\\text{No cóż, } (-1)^{m-1}=(-1)^{m+1}"
 
 POST_INDEX: 1
+
+--- Example 3: has_inline_solution hint is wrong (no real answer exists) ---
+Problem: \\text{Rozwiązać równanie kwadratowe } x^2-4x+3=0 \\text{ w liczbach rzeczywistych.}
+Posts:
+  [0] azanus111 (contains_images=False): "\\text{Dostałem takie zadanie: } \\text{Rozwiązać równanie kwadratowe } x^2-4x+3=0 \\text{ w liczbach rzeczywistych.} \\text{Wydaje mi się, że } x=-1 \\text{ i } x=3 \\text{ są rozwiązaniami.}"
+
+POST_INDEX: NO_ANSWER
+"""
+
+GRADE_SYSTEM = """\
+You are a strict final-quality grader for a math fine-tuning dataset. Given a PROBLEM and a \
+proposed SOLUTION, decide whether the solution is valid training data.
+
+Reject the solution if ANY of these apply:
+- It does not address the specific problem given — e.g. it answers a different or broader \
+  question, or is a list of restated problem statements instead of an actual derivation
+- It does not reach a real conclusion when the problem calls for one — trails off, ends in \
+  "\\cdots" or a rhetorical question, or just restates given information without solving it
+- Its final result contradicts or is unrelated to its own derivation (the steps solve one \
+  quantity but the stated result is a different quantity)
+- It contains an obvious mathematical error
+
+Accept the solution if it correctly and completely solves the ACTUAL problem given — even if \
+concise, and even without a final \\textbf{Wynik} (a proof correctly ending in "q.e.d." with no \
+numeric result is valid; not every problem has a single boxed answer).
+
+Additionally, extract the final answer as a separate, standalone value — this will be used \
+directly as ground truth, so it must be self-contained (no "Krok N:" labels, no LaTeX display \
+wrappers, just the bare result, e.g. "1", "m \\in [-2, 2]", "x = -8, 3, -1"). If the solution is \
+INVALID, or is VALID but has no single final result (e.g. a proof), use NONE.
+
+Respond with exactly three lines:
+VERDICT: VALID   (or INVALID)
+REASON: one short sentence
+FINAL_ANSWER: <the bare final result, or NONE>
+
+--- Example 1: valid — concise, correct, no Wynik needed ---
+Problem: Udowodnij, że dla każdej liczby całkowitej n wyrażenie n^2+n jest parzyste.
+Solution: Krok 1: n^2+n = n(n+1). Krok 2: n i n+1 są kolejnymi liczbami całkowitymi, więc \
+jedna z nich jest parzysta. Krok 3: Iloczyn zawierający liczbę parzystą jest parzysty. q.e.d.
+VERDICT: VALID
+REASON: Complete, correct proof; no numeric result is expected for a proof.
+FINAL_ANSWER: NONE
+
+--- Example 2: invalid — restated problem list instead of a derivation ---
+Problem: Zbadaj dla jakich wartości parametru m istnieją rozwiązania równania: cos x = m.
+Solution: Krok 1: cos x - cos(x+pi/3) = 0. Krok 2: sin x - cos x = 0. Krok 3: sin x + cos x = 1. \
+Krok 4: Zbadaj dla jakich wartości parametru m istnieją rozwiązania równania: Krok 5: cos x = m. \
+Krok 6: sin(4x+1) = 2m+3. Krok 7: sqrt(3) sin x + cos x = m.
+VERDICT: INVALID
+REASON: Just lists other problems from the thread verbatim; never derives the bound on m.
+FINAL_ANSWER: NONE
+
+--- Example 3: invalid — result contradicts its own derivation ---
+Problem: Oblicz pole powierzchni odciętej od sfery x^2+y^2+z^2=5 płaszczyzną z=1.
+Solution: Krok 1-4: [a full double-integral derivation for the paraboloid z=x^2+y^2, a \
+different surface] ... Krok 5: A w 1) -2*sqrt(5)*pi + 10*pi. \\textbf{Wynik:} (5*sqrt(5)-1)/6*pi
+VERDICT: INVALID
+REASON: The worked derivation and boxed result solve a different surface's area, not the \
+sphere the problem asks about — the real answer is dismissed as a side note in Krok 5.
+FINAL_ANSWER: NONE
+
+--- Example 4: valid — final answer extracted as a bare, standalone value ---
+Problem: Rozwiąż równanie: sqrt(3) sin x + cos x = m dla jakich m istnieje rozwiązanie.
+Solution: Krok 1-7: [amplitude-phase derivation] ... \\textbf{Wynik:} \\[ m \\in [-2, 2] \\]
+VERDICT: VALID
+REASON: Complete, correct derivation using the amplitude-phase method, correct final bound.
+FINAL_ANSWER: m \\in [-2, 2]
 """
 
 FIX_LATEX_SYSTEM = """\
@@ -243,12 +365,21 @@ Step 2 — Fix remaining syntax errors:
 - \\infty as list terminator  →  \\cdots
 - spaces in index braces: _{  x  }  →  _{x}
 
---- Example ---
+--- Example 1 ---
 Input:
   \\text{Niech } f(m)=\\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3} \\text{ Udowodnić, że } f(m)=\\frac{2}{3}(-1)^{m+1}
 
 Output:
   Niech $f(m)=\\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3}$. Udowodnić, że $f(m)=\\frac{2}{3}(-1)^{m+1}$
 
-Return ONLY the corrected LaTeX. No explanations, no markdown code fences.
+--- Example 2 ---
+Input:
+  \\text{Prawdopodobieństwo wynosi } P(A)=\\frac{3}{8} \\text{, oraz } P(B|A)= \\frac{1}{2} \\text{, więc } P(A \\cap B)=\\frac{3}{16}
+
+Output:
+  Prawdopodobieństwo wynosi $P(A)=\\frac{3}{8}$, oraz $P(B|A)=\\frac{1}{2}$, więc $P(A \\cap B)=\\frac{3}{16}$
+
+IMPORTANT: The examples above only illustrate the transformation rules. Never repeat, \
+reference, or reuse their content — return ONLY the corrected version of the input text \
+given to you in this turn. No explanations, no markdown code fences.
 """
