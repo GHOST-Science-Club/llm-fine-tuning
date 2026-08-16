@@ -226,11 +226,15 @@ class DataProcessingPipeline:
         `question`? Also extracts the final answer in the same call
         Returns {"valid": bool, "reason": str, "final_answer": str | None}.
         """
-        user_prompt = f"Problem: {question[:1000]}\n\nSolution: {solution[:2000]}"
-        raw = await self.llm.call(GRADE_SYSTEM, user_prompt)
+        user_prompt = f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n\nSolution: {solution[:self.SOLUTION_LENGTH_THRESHOLD]}"
+        try:
+            raw = await self.llm.call(GRADE_SYSTEM, user_prompt)
+        except Exception as e:
+            debug("STEP 5 — grade_solution | error", f"Error occurred while calling LLM: {e}")
+            raw = ""
         debug("STEP 5 — grade_solution | raw LLM output", raw)
 
-        valid = True
+        valid = False # assume invalid unless explicitly marked valid
         reason = ""
         final_answer = None
         for line in raw.splitlines():
