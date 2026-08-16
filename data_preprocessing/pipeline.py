@@ -16,6 +16,10 @@ async def _run(quiet: bool) -> None:
             config.CHECKPOINT_FILE,
             llm=llm,
             batch_size=config.BATCH_SIZE,
+            CLEAN_FIELDS=config.CLEAN_FIELDS,
+            ANSWER_OVERLAP_THRESHOLD=config.ANSWER_OVERLAP_THRESHOLD,
+            QUESTION_LENGTH_THRESHOLD=config.QUESTION_LENGTH_THRESHOLD,
+            SOLUTION_LENGTH_THRESHOLD=config.SOLUTION_LENGTH_THRESHOLD,
             log_file=config.LOG_FILE,
             quiet=quiet,
         )
