@@ -39,6 +39,15 @@ class PipelineConfig:
     # after each batch completes. 0 → defaults to 2 * MAX_CONCURRENCY in __post_init__.
     BATCH_SIZE: int = field(default_factory=lambda: int(os.getenv("BATCH_SIZE", "0")))
 
+
+    # What fields make up the clean, training-ready dataset (everything else is diagnostic).
+    CLEAN_FIELDS : tuple[str, ...]= field(init=False)
+    # Word-overlap (Jaccard) ratio above which a "found answer" is treated as just the
+    # question restated rather than a real solution, and discarded.
+    ANSWER_OVERLAP_THRESHOLD : float = field(init=False)
+    QUESTION_LENGTH_THRESHOLD : int = field(init=False)
+    SOLUTION_LENGTH_THRESHOLD : int = field(init=False)
+
     def __post_init__(self) -> None:
         if self.BATCH_SIZE <= 0:
             self.BATCH_SIZE = 2 * self.MAX_CONCURRENCY
@@ -49,6 +58,10 @@ class PipelineConfig:
         self.CHECKPOINT_FILE = self.data_dir / "checkpoint" / "checkpoint.txt"
         self.INPUT_SOURCE = "meta-math/MetaMathQA" if self.load_from_hub else self.INPUT_FILE
         self.DATASET_DESTINATION = "erybie222/test" if self.push_to_hub else self.DATASET_FILE
+        self.CLEAN_FIELDS = ("source_url", "question", "category", "solution", "final_answer")
+        self.ANSWER_OVERLAP_THRESHOLD = 0.85
+        self.QUESTION_LENGTH_THRESHOLD = 1000
+        self.SOLUTION_LENGTH_THRESHOLD = 3000
         paths = [self.OUTPUT_FILE.parent, self.DATASET_FILE.parent,
                  self.INPUT_FILE.parent, self.CHECKPOINT_FILE.parent]
         if self.LOG_FILE:

@@ -16,23 +16,18 @@ class Category(str, Enum):
     PROOF = "PROOF"
     COMPLEX = "COMPLEX"
 
-# Fields that make up the clean, training-ready dataset (everything else is diagnostic).
-# final_answer is a standalone, self-contained value (no "Krok N:" labels, no LaTeX display
-# wrappers) extracted by the grading step — usable directly as GRPO reward ground truth
-# without having to re-parse it out of the free-text `solution`.
-CLEAN_FIELDS = ("source_url", "question", "category", "solution", "final_answer")
-
-# Word-overlap (Jaccard) ratio above which a "found answer" is treated as just the
-# question restated rather than a real solution, and discarded. Calibrated against
-# synthetic cases: a real derivation scores ~0.1-0.4 even when it opens by restating
-# the problem, while a duplicate/near-duplicate post scores 0.75-1.0 — 0.85 sits in
-# the gap with margin on both sides. (A first guess of 0.6 turned out to sit inside
-# the legitimate-answer range and would have false-positived — don't reuse that value.)
-ANSWER_OVERLAP_THRESHOLD = 0.85
-
 class DataProcessingPipeline:
 
-    def __init__(self, input_source: Path | str, output_file: Path, dataset_destination: Path | str, checkpoint_file: Path, llm: LLMClient, batch_size: int, log_file: Path | None = None, quiet: bool = False):
+    def __init__(self, input_source: Path | str, 
+                 output_file: Path, 
+                 dataset_destination: Path | str, 
+                 checkpoint_file: Path, llm: LLMClient, batch_size: int, 
+                 CLEAN_FIELDS: tuple[str, ...],
+                 ANSWER_OVERLAP_THRESHOLD: float,
+                 QUESTION_LENGTH_THRESHOLD: int,
+                 SOLUTION_LENGTH_THRESHOLD: int ,
+                 log_file: Path | None = None,
+                 quiet: bool = False):
         self.input_source = input_source
         self.output_file = output_file
         self.log_file = log_file
@@ -42,6 +37,10 @@ class DataProcessingPipeline:
         self.batch_size = batch_size
         self.raw_data = []
         self.quiet = quiet
+        self.ANSWER_OVERLAP_THRESHOLD = ANSWER_OVERLAP_THRESHOLD
+        self.QUESTION_LENGTH_THRESHOLD = QUESTION_LENGTH_THRESHOLD
+        self.SOLUTION_LENGTH_THRESHOLD = SOLUTION_LENGTH_THRESHOLD
+        self.CLEAN_FIELDS = CLEAN_FIELDS
         self.stats = {
             "loaded": 0,
             "filtered_out": 0,
@@ -112,7 +111,7 @@ class DataProcessingPipeline:
         """Returns {"keep": bool, "reason": str}."""
         has_images = any(p.get("contains_images", False) for p in (relevant_posts or []))
         user_prompt = (
-            f"Problem: {question[:1000]}\n"
+            f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n"
             f"contains_images in relevant posts: {str(has_images).lower()}"
         )
         raw = await self.llm.call(FILTER_SYSTEM, user_prompt)
@@ -136,7 +135,7 @@ class DataProcessingPipeline:
         (exact value, expression, proof, complex)
         Returns {"category": Category | None, "reason": str}.
         """
-        user_prompt = f"Problem: {question[:1000]}"
+        user_prompt = f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}"
         raw = await self.llm.call(CLASSIFY_SYSTEM, user_prompt)
 
         category_str = ""
@@ -175,7 +174,7 @@ class DataProcessingPipeline:
             if has_inline_solution else ""
         )
         user_prompt = (
-            f"Problem: {question[:1000]}\n\n"
+            f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n\n"
             f"Posts:\n{posts_text}\n\n"
             f"Find the best answer.{hint}"
         )
@@ -213,8 +212,8 @@ class DataProcessingPipeline:
 
     async def _rewrite_answer(self, question: str, raw_answer: str) -> str:
         user_prompt = (
-            f"Problem: {question[:1000]}\n\n"
-            f"Raw answer: {raw_answer[:2000]}\n\n"
+            f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n\n"
+            f"Raw answer: {raw_answer[:self.SOLUTION_LENGTH_THRESHOLD]}\n\n"
             "Rewritten solution:"
         )
         result = (await self.llm.call(REWRITE_SYSTEM, user_prompt)).strip()
@@ -288,10 +287,9 @@ class DataProcessingPipeline:
             "final_answer": final_answer,
         }
 
-    @staticmethod
-    def _build_clean_record(full_record: dict) -> dict:
+    def _build_clean_record(self, full_record: dict) -> dict:
         """Project a full record down to the clean, training-ready fields only."""
-        return {key: full_record[key] for key in CLEAN_FIELDS}
+        return {key: full_record[key] for key in self.CLEAN_FIELDS}
 
     @staticmethod
     def _token_overlap(a: str, b: str) -> float:
@@ -383,7 +381,7 @@ class DataProcessingPipeline:
                     if not self.quiet:
                         print(f"  {label} -> No answer found in thread. Discarding.")
                     self.stats["filtered_out"] += 1
-                elif self._token_overlap(question, raw_answer) >= ANSWER_OVERLAP_THRESHOLD:
+                elif self._token_overlap(question, raw_answer) >= self.ANSWER_OVERLAP_THRESHOLD:
                     if not self.quiet:
                         print(f"  {label} -> Picked answer looks like a restated question, not a real solution. Discarding.")
                     self.stats["filtered_out"] += 1
@@ -393,13 +391,16 @@ class DataProcessingPipeline:
                         raw_answer_clean = await self._fix_latex(normalize_latex(raw_answer))
                         rewritten = await self._rewrite_answer(question_clean, raw_answer_clean)
                         solution = await self._fix_latex(rewritten)
-                        if(len(solution) > 3*len(raw_answer_clean) and len(solution) > 500):
+                        if(len(solution) > 3*len(raw_answer_clean) ):
                             if not self.quiet:
-                                print(f"  {label} -> WARNING: Rewritten solution is at least twice as long as raw answer. Check for verbosity.")
+                                print(f"""  {label} -> WARNING: Rewritten solution is at least three times as long as raw answer. Check for verbosity.""")
                             self.stats["verbose_solutions"] += 1
 
                         # Step D: Grading check — does the solution actually answer this question?
                         grading = await self._grade_solution(question_clean, solution)
+                        if not grading["valid"] or grading["final_answer"] is None:
+                            debug("STEP 5 — grade_solution | grading result", str(grading))
+
                         grading_reason = grading["reason"]
                         final_answer = grading["final_answer"]
 
