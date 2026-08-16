@@ -472,7 +472,7 @@ class DataProcessingPipeline:
 
         records: list[tuple[dict | None, dict | None]] = []
         for r in results:
-            if isinstance(r, BaseException):
+            if isinstance(r, (Exception, asyncio.CancelledError)):
                 print(f"Unexpected error processing a task in thread {thread_idx}: {r}")
                 self.stats["llm_parse_errors"] += 1
                 continue
@@ -530,7 +530,7 @@ class DataProcessingPipeline:
 
                 # Write the whole batch in thread order, then advance the checkpoint.
                 for idx, tr in zip(range(batch_start, batch_end), thread_results):
-                    if isinstance(tr, BaseException):
+                    if isinstance(tr, (Exception, asyncio.CancelledError)):
                         print(f"Unexpected error processing thread {idx}: {tr}")
                         continue
                     for full_record, clean_record in tr:
