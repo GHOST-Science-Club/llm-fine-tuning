@@ -403,9 +403,11 @@ class DataProcessingPipeline:
                         # Step D: Grading check — does the solution actually answer this question?
                         grading = await self._grade_solution(question_clean, solution)
                         if not grading["valid"] or grading["final_answer"] is None:
-                            debug("STEP 5 — grade_solution | grading result", str(grading))
+                            raise Exception("grading system failed")
+                            
 
-                        grading_reason = grading["reason"]
+
+                        grading_reason = grading.get("reason", "")
                         final_answer = grading["final_answer"]
 
                         if not grading["valid"]:
