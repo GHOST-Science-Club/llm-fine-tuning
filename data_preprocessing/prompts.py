@@ -189,15 +189,21 @@ Rules:
   strony do kwadratu", "ponieważ funkcja jest parzysta")
 - Do NOT invent new mathematical content: no new values, claims, sub-results, or facts that \
   are not already present in or directly implied by the original answer. You may only \
-  explain WHY a step the original already takes is valid — never introduce a step, number, \
-  or formula the original didn't have. If the original has little content, keep the rewrite \
+  explain WHY a step the original already takes is valid — never introduce a formula the \
+  original didn't have. If the original has little content, keep the rewrite \
   equally minimal rather than padding it out.
 - Copy all formulas EXACTLY — do not alter the math itself, only add connecting explanation
 - Fix LaTeX syntax: use $...$ for inline math, \\[ ... \\] for display math
-- End with \\textbf{Wynik:} and the final result in \\[ ... \\]
-- If the original has no final numeric result, skip \\textbf{Wynik:}
+- End with \\textbf{Wynik:} followed by \\boxed{...} containing ONLY the bare final result — \
+  no restated equation, no repeated variable/expression from the problem. The steps above \
+  already show the full derivation, so the boxed value should be as short as possible: a \
+  number, a set/interval, a list of roots, a formula — never "f(x) = ..." repeated.
+- If the problem has multiple distinct required values (e.g. several sub-answers, dimensions \
+  of a shape), label each one inside the box: \\boxed{a = 3, b = 5} rather than an unlabeled list.
+- If the original has no final numeric result (is a proof/complex equation), skip \\textbf{Wynik:} \
+  and leave the final line blank.
 
---- Example 1: explained derivation ---
+--- Example 1: explained derivation, bare boxed result ---
 Raw answer:
   "\\text{Niech } a=\\sqrt{n^2+2n-1} \\text{, } b=n \\text{, korzystamy ze wzoru } a-b=\\frac{a^2-b^2}{a+b} \\text{, liczymy i wychodzi 1}"
 
@@ -210,9 +216,9 @@ Krok 2: Korzystamy ze wzoru $a-b=\\frac{a^2-b^2}{a+b}$, który pozwala usunąć 
 Krok 3: Podstawiając i licząc, wychodzi 1.
 
 \\textbf{Wynik:}
-\\[ \\lim_{n \\to \\infty}(\\sqrt{n^2+2n-1}-n) = 1 \\]
+\\boxed{1}
 
---- Example 2: explained derivation ---
+--- Example 2: explained derivation, bare boxed result (no restated "P(...)=" prefix) ---
 Raw answer:
   "\\text{Rzucamy kostką 3 razy, niech } P(\\text{suma}=10)= \\frac{27}{216} \\text{, po skróceniu } \\frac{1}{8}"
 
@@ -223,9 +229,24 @@ Krok 1: Rzucamy kostką 3 razy — mamy $6^3=216$ jednakowo prawdopodobnych wyni
 Krok 2: $P(\\text{suma}=10)=\\frac{27}{216}$, bo tyle jest trójek wyników dających sumę 10; po skróceniu $\\frac{1}{8}$.
 
 \\textbf{Wynik:}
-\\[ P(\\text{suma}=10) = \\frac{1}{8} \\]
+\\boxed{\\frac{1}{8}}
 
---- Example 3: raw answer has no real derivation — do NOT invent explanations for steps that aren't there ---
+--- Example 3: multiple required values — labelled inside the box ---
+Raw answer:
+  "\\text{Rolnik ma } 100 \\text{m siatki, więc } 2a+2b=100 \\text{, czyli } a+b=50 \\text{. Pole } P=ab=a(50-a) \\text{ jest maksymalne dla } a=25 \\text{, wtedy } b=25 \\text{, } P=625 \\text{m}^2"
+
+Rewritten:
+
+Krok 1: Mamy $2a+2b=100$, czyli $a+b=50$ — to wynika z obwodu prostokątnego ogrodzenia.
+
+Krok 2: Pole $P=ab=a(50-a)$ — podstawiamy $b=50-a$ do wzoru na pole.
+
+Krok 3: Funkcja $P(a)$ osiąga maksimum dla $a=25$, wtedy $b=25$ — to wierzchołek paraboli skierowanej ramionami w dół.
+
+\\textbf{Wynik:}
+\\boxed{a = 25,\\ b = 25,\\ P = 625\\ \\text{m}^2}
+
+--- Example 4: raw answer has no real derivation — do NOT invent explanations for steps that aren't there ---
 Raw answer:
   "\\text{Niech } f(m)=\\prod_{n \\neq m} \\frac{n^3-m^3}{n^3+m^3} \\text{, udowodnić, że } f(m)=\\frac{2}{3}(-1)^{m+1} m!^2 \\prod_{n=1}^m \\frac{n+m}{n^3+m^3}"
 
@@ -303,9 +324,12 @@ concise, and even without a final \\textbf{Wynik} (a proof correctly ending in "
 numeric result is valid; not every problem has a single boxed answer).
 
 Additionally, extract the final answer as a separate, standalone value — this will be used \
-directly as ground truth, so it must be self-contained (no "Krok N:" labels, no LaTeX display \
-wrappers, just the bare result, e.g. "1", "m \\in [-2, 2]", "x = -8, 3, -1"). If the solution is \
-INVALID, or is VALID but has no single final result (e.g. a proof), use NONE.
+directly as ground truth, so it must be self-contained: strip "Krok N:" labels, \\boxed{}/LaTeX \
+display wrappers, and any restated equation or variable name from the left-hand side — keep \
+ONLY the bare result itself, e.g. "1", "m \\in [-2, 2]", "-8, 3, -1" (NOT "x = -8, 3, -1"). \
+If the problem has multiple distinct required values, use the SAME labelled format the \
+solution's \\boxed{} uses, e.g. "a = 25, b = 25, P = 625". If the solution is INVALID, or is \
+VALID but has no single final result (e.g. a proof), use NONE.
 
 Respond with exactly three lines:
 VERDICT: VALID   (or INVALID)
@@ -332,18 +356,26 @@ FINAL_ANSWER: NONE
 --- Example 3: invalid — result contradicts its own derivation ---
 Problem: Oblicz pole powierzchni odciętej od sfery x^2+y^2+z^2=5 płaszczyzną z=1.
 Solution: Krok 1-4: [a full double-integral derivation for the paraboloid z=x^2+y^2, a \
-different surface] ... Krok 5: A w 1) -2*sqrt(5)*pi + 10*pi. \\textbf{Wynik:} (5*sqrt(5)-1)/6*pi
+different surface] ... Krok 5: A w 1) -2*sqrt(5)*pi + 10*pi. \\textbf{Wynik:} \\boxed{(5*sqrt(5)-1)/6*pi}
 VERDICT: INVALID
 REASON: The worked derivation and boxed result solve a different surface's area, not the \
 sphere the problem asks about — the real answer is dismissed as a side note in Krok 5.
 FINAL_ANSWER: NONE
 
---- Example 4: valid — final answer extracted as a bare, standalone value ---
+--- Example 4: valid — final answer extracted as a bare, standalone value (no restated LHS) ---
 Problem: Rozwiąż równanie: sqrt(3) sin x + cos x = m dla jakich m istnieje rozwiązanie.
-Solution: Krok 1-7: [amplitude-phase derivation] ... \\textbf{Wynik:} \\[ m \\in [-2, 2] \\]
+Solution: Krok 1-7: [amplitude-phase derivation] ... \\textbf{Wynik:} \\boxed{m \\in [-2, 2]}
 VERDICT: VALID
 REASON: Complete, correct derivation using the amplitude-phase method, correct final bound.
 FINAL_ANSWER: m \\in [-2, 2]
+
+--- Example 5: valid — multiple required values, labelled format carried through ---
+Problem: Rolnik ma 100m siatki i chce ogrodzić prostokątną działkę o największym polu. Podaj wymiary.
+Solution: Krok 1-3: [derivation via a+b=50, P=a(50-a), maximized at a=25] ... \\textbf{Wynik:} \
+\\boxed{a = 25,\\ b = 25,\\ P = 625\\ \\text{m}^2}
+VERDICT: VALID
+REASON: Complete, correct optimization; all three required quantities are derived and boxed.
+FINAL_ANSWER: a = 25, b = 25, P = 625
 """
 
 FIX_LATEX_SYSTEM = """\
