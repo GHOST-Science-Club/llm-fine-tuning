@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from contextlib import ExitStack
 from enum import Enum
 from pathlib import Path
@@ -102,8 +103,15 @@ class DataProcessingPipeline:
             debug("STEP 0 — split_tasks | JSON parse failed, using fallback", raw)
             self.stats["llm_parse_errors"] +=  1
 
+        # Fallback: prefer post[0], but a thread can be started with nothing but a bare
+        # formula and "pomóżcie proszę" while the actual question is only in the title —
+        # if the title is clearly more substantial, use that instead.
+        fallback_question = posts[0]["content"] if posts else title
+        if posts and title and len(title.strip()) > len(posts[0]["content"].strip()):
+            fallback_question = title
+
         return [{
-            "question": posts[0]["content"] if posts else title,
+            "question": fallback_question,
             "post_indices": list(range(len(posts)))
         }]
 
@@ -303,6 +311,52 @@ class DataProcessingPipeline:
             return 0.0
         return len(ta & tb) / len(ta | tb)
 
+    @staticmethod
+    def _clean_boxed_delimiters(text: str) -> str:
+        """
+        Collapses a redundant inline $...$ wrapper nested directly inside an outer
+        display-math wrapper ($$...$$ or \\[...\\]) around the same content, e.g.
+        "$$ $ \\boxed{1} $ $$" -> "$$ \\boxed{1} $$". The LLM produces this nesting bug
+        inconsistently despite prompt instructions, so it's fixed deterministically here.
+        """
+        text = re.sub(
+            r"\$\$\s*\$(.*?)\$\s*\$\$",
+            lambda m: f"$$ {m.group(1).strip()} $$",
+            text,
+            flags=re.DOTALL,
+        )
+        text = re.sub(
+            r"\\\[\s*\$(.*?)\$\s*\\\]",
+            lambda m: f"\\[ {m.group(1).strip()} \\]",
+            text,
+            flags=re.DOTALL,
+        )
+        return text
+
+    @staticmethod
+    def _strip_math_wrappers(text: str | None) -> str | None:
+        """
+        Deterministically strips outer math-mode delimiters ($, $$, \\(\\), \\[\\]) and an
+        outer \\boxed{} wrapper from an extracted final answer. GRADE_SYSTEM is instructed
+        to already return a bare value, but that instruction isn't followed reliably every
+        time, so this is a belt-and-suspenders cleanup rather than the only line of defense.
+        """
+        if text is None:
+            return None
+        t = text.strip()
+        changed = True
+        while changed:
+            changed = False
+            for open_d, close_d in (("$$", "$$"), ("\\[", "\\]"), ("\\(", "\\)"), ("$", "$")):
+                if t.startswith(open_d) and t.endswith(close_d) and len(t) > len(open_d) + len(close_d):
+                    t = t[len(open_d):-len(close_d)].strip()
+                    changed = True
+                    break
+            if t.startswith("\\boxed{") and t.endswith("}"):
+                t = t[len("\\boxed{"):-1].strip()
+                changed = True
+        return t
+
     async def _process_task(self, task: dict, posts: list[dict], url: str, title: str,
                             label: str) -> tuple[dict | None, dict | None]:
         """
@@ -394,7 +448,7 @@ class DataProcessingPipeline:
                     try:
                         raw_answer_clean = await self._fix_latex(normalize_latex(raw_answer))
                         rewritten = await self._rewrite_answer(question_clean, raw_answer_clean)
-                        solution = await self._fix_latex(rewritten)
+                        solution = self._clean_boxed_delimiters(await self._fix_latex(rewritten))
                         if(len(solution) > 3*len(raw_answer_clean) ):
                             if not self.quiet:
                                 print(f"""  {label} -> WARNING: Rewritten solution is at least three times as long as raw answer. Check for verbosity.""")
@@ -402,13 +456,9 @@ class DataProcessingPipeline:
 
                         # Step D: Grading check — does the solution actually answer this question?
                         grading = await self._grade_solution(question_clean, solution)
-                        if not grading["valid"] or grading["final_answer"] is None:
-                            raise Exception("grading system failed")
-                            
-
 
                         grading_reason = grading.get("reason", "")
-                        final_answer = grading["final_answer"]
+                        final_answer = self._strip_math_wrappers(grading["final_answer"])
 
                         if not grading["valid"]:
                             if not self.quiet:
