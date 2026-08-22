@@ -441,7 +441,12 @@ class DataProcessingPipeline:
                             self.stats["verbose_solutions"] += 1
 
                         # Step D: Grading check — does the solution actually answer this question?
-                        grading = await self._grade_solution(question_clean, solution)
+                        try:
+                            grading = await self._grade_solution(question_clean, solution)
+                        except Exception as e:
+                            print(f"  {label} Error while grading solution! {e}")
+                            grading = {"valid": False, "reason": "Error during grading", "final_answer": None}
+                            self.stats["failed_grading"] += 1
 
                         grading_reason = grading.get("reason", "")
                         final_answer = self._ensure_math_wrapped(grading["final_answer"])
