@@ -16,13 +16,13 @@ class LLMClient:
 
     def __init__(self, config: PipelineConfig):
         self._cfg = config
-        self._sem = asyncio.Semaphore(config.MAX_CONCURRENCY)
+        self._sem = asyncio.Semaphore(config.max_concurrency)
 
 
         self._client = AsyncOpenAI(
-            api_key=config.API_KEY,
-            base_url=config.BASE_URL,
-            timeout=config.REQUEST_TIMEOUT,
+            api_key=config.api_key,
+            base_url=config.base_url,
+            timeout=config.request_timeout,
             max_retries=3
         )
 
@@ -31,25 +31,25 @@ class LLMClient:
         async with self._sem:
             try:
                 response = await self._client.chat.completions.create(
-                    model=self._cfg.MODEL,
+                    model=self._cfg.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    temperature=self._cfg.TEMPERATURE,
+                    temperature=self._cfg.temperature,
                 )
             except APIError as e:
-                if self._cfg.DEBUG:
-                    print(f"\n[API ERROR] model={self._cfg.MODEL}")
+                if self._cfg.debug:
+                    print(f"\n[API ERROR] model={self._cfg.model}")
                     print(f"[API ERROR] {e}")
                 raise
 
         if not response.choices:
-            raise ValueError(f"LLM returned no choices (model={self._cfg.MODEL})")
+            raise ValueError(f"LLM returned no choices (model={self._cfg.model})")
 
         content = response.choices[0].message.content
         if content is None:
-            raise ValueError(f"LLM returned empty content (model={self._cfg.MODEL})")
+            raise ValueError(f"LLM returned empty content (model={self._cfg.model})")
 
         return content.strip()
 
@@ -64,7 +64,7 @@ class LLMClient:
 
 def debug(stage: str, content: str) -> None:
     """Print a labelled debug block when DEBUG=true."""
-    if not config.DEBUG:
+    if not config.debug:
         return
     sep = "─" * 60
     print(f"\n{sep}")
@@ -78,7 +78,7 @@ def save_dataset(
     input_file_path: str | Path,
     output_destination: str | Path,
     val_size: float = 0.1,
-    seed: int = config.SEED,
+    seed: int = config.seed,
 ) -> None:
     """Saves HuggingFace dataset locally (Path) or pushes to HF Hub (str repo id), with train/val split."""
     input_path = Path(input_file_path)
@@ -100,7 +100,3 @@ def save_dataset(
               f"(train={len(dataset['train'])}, validation={len(dataset['validation'])})")
     else:
         raise ValueError("output_destination must be a local Path or a HF Hub repo id string.")
-
-
-
-

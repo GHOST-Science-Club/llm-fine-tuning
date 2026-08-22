@@ -31,11 +31,11 @@ class DataProcessingPipeline:
     def __init__(self, input_source: Path | str, 
                  output_file: Path, 
                  dataset_destination: Path | str, 
-                 checkpoint_file: Path, llm: LLMClient, batch_size: int, 
-                 CLEAN_FIELDS: tuple[str, ...],
-                 ANSWER_OVERLAP_THRESHOLD: float,
-                 QUESTION_LENGTH_THRESHOLD: int,
-                 SOLUTION_LENGTH_THRESHOLD: int ,
+                 checkpoint_file: Path, llm: LLMClient, batch_size: int,
+                 clean_fields: tuple[str, ...],
+                 answer_overlap_threshold: float,
+                 question_length_threshold: int,
+                 solution_length_threshold: int ,
                  log_file: Path | None = None,
                  quiet: bool = False):
         self.input_source = input_source
@@ -47,10 +47,10 @@ class DataProcessingPipeline:
         self.batch_size = batch_size
         self.raw_data = []
         self.quiet = quiet
-        self.ANSWER_OVERLAP_THRESHOLD = ANSWER_OVERLAP_THRESHOLD
-        self.QUESTION_LENGTH_THRESHOLD = QUESTION_LENGTH_THRESHOLD
-        self.SOLUTION_LENGTH_THRESHOLD = SOLUTION_LENGTH_THRESHOLD
-        self.CLEAN_FIELDS = CLEAN_FIELDS
+        self.answer_overlap_threshold = answer_overlap_threshold
+        self.question_length_threshold = question_length_threshold
+        self.solution_length_threshold = solution_length_threshold
+        self.clean_fields = clean_fields
         self.stats = {
             "loaded": 0,
             "filtered_out": 0,
@@ -128,7 +128,7 @@ class DataProcessingPipeline:
         """Returns {"keep": bool, "reason": str}."""
         has_images = any(p.get("contains_images", False) for p in (relevant_posts or []))
         user_prompt = (
-            f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n"
+            f"Problem: {question[:self.question_length_threshold]}\n"
             f"contains_images in relevant posts: {str(has_images).lower()}"
         )
         raw = await self.llm.call(FILTER_SYSTEM, user_prompt)
@@ -152,7 +152,7 @@ class DataProcessingPipeline:
         (exact value, expression, proof, complex)
         Returns {"category": Category | None, "reason": str}.
         """
-        user_prompt = f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}"
+        user_prompt = f"Problem: {question[:self.question_length_threshold]}"
         raw = await self.llm.call(CLASSIFY_SYSTEM, user_prompt)
 
         category_str = ""
@@ -191,7 +191,7 @@ class DataProcessingPipeline:
             if has_inline_solution else ""
         )
         user_prompt = (
-            f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n\n"
+            f"Problem: {question[:self.question_length_threshold]}\n\n"
             f"Posts:\n{posts_text}\n\n"
             f"Find the best answer.{hint}"
         )
@@ -229,8 +229,8 @@ class DataProcessingPipeline:
 
     async def _rewrite_answer(self, question: str, raw_answer: str) -> str:
         user_prompt = (
-            f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n\n"
-            f"Raw answer: {raw_answer[:self.SOLUTION_LENGTH_THRESHOLD]}\n\n"
+            f"Problem: {question[:self.question_length_threshold]}\n\n"
+            f"Raw answer: {raw_answer[:self.solution_length_threshold]}\n\n"
             "Rewritten solution:"
         )
         result = (await self.llm.call(REWRITE_SYSTEM, user_prompt)).strip()
@@ -243,7 +243,7 @@ class DataProcessingPipeline:
         `question`? Also extracts the final answer in the same call
         Returns {"valid": bool, "reason": str, "final_answer": str | None}.
         """
-        user_prompt = f"Problem: {question[:self.QUESTION_LENGTH_THRESHOLD]}\n\nSolution: {solution[:self.SOLUTION_LENGTH_THRESHOLD]}"
+        user_prompt = f"Problem: {question[:self.question_length_threshold]}\n\nSolution: {solution[:self.solution_length_threshold]}"
         try:
             raw = await self.llm.call(GRADE_SYSTEM, user_prompt)
         except Exception as e:
@@ -310,7 +310,7 @@ class DataProcessingPipeline:
 
     def _build_clean_record(self, full_record: dict) -> dict:
         """Project a full record down to the clean, training-ready fields only."""
-        return {key: full_record[key] for key in self.CLEAN_FIELDS}
+        return {key: full_record[key] for key in self.clean_fields}
 
     @staticmethod
     def _token_overlap(a: str, b: str) -> float:
@@ -438,7 +438,7 @@ class DataProcessingPipeline:
                     if not self.quiet:
                         print(f"  {label} -> No answer found in thread. Discarding.")
                     self.stats["filtered_out"] += 1
-                elif self._token_overlap(question_clean, raw_answer) >= self.ANSWER_OVERLAP_THRESHOLD:
+                elif self._token_overlap(question_clean, raw_answer) >= self.answer_overlap_threshold:
                     if not self.quiet:
                         print(f"  {label} -> Picked answer looks like a restated question, not a real solution. Discarding.")
                     self.stats["filtered_out"] += 1

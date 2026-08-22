@@ -10,17 +10,17 @@ async def _run(quiet: bool) -> None:
     # closed when the pipeline finishes (or raises).
     async with LLMClient(config) as llm:
         pipeline = DataProcessingPipeline(
-            config.INPUT_SOURCE,
-            config.OUTPUT_FILE,
-            config.DATASET_DESTINATION,
-            config.CHECKPOINT_FILE,
+            config.input_source,
+            config.output_file,
+            config.dataset_destination,
+            config.checkpoint_file,
             llm=llm,
-            batch_size=config.BATCH_SIZE,
-            CLEAN_FIELDS=config.CLEAN_FIELDS,
-            ANSWER_OVERLAP_THRESHOLD=config.ANSWER_OVERLAP_THRESHOLD,
-            QUESTION_LENGTH_THRESHOLD=config.QUESTION_LENGTH_THRESHOLD,
-            SOLUTION_LENGTH_THRESHOLD=config.SOLUTION_LENGTH_THRESHOLD,
-            log_file=config.LOG_FILE,
+            batch_size=config.batch_size,
+            clean_fields=config.clean_fields,
+            answer_overlap_threshold=config.answer_overlap_threshold,
+            question_length_threshold=config.question_length_threshold,
+            solution_length_threshold=config.solution_length_threshold,
+            log_file=config.log_file,
             quiet=quiet,
         )
         await pipeline.run()
