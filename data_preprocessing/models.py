@@ -328,7 +328,8 @@ class DataProcessingPipeline:
         expressions inside a recognized delimiter — a bare "m \\in [-2, 2]" is invisible to
         it. GRADE_SYSTEM is instructed to already wrap the answer, but that instruction isn't
         followed reliably every time, so this is a belt-and-suspenders fallback rather than
-        the only line of defense.
+        the only line of defense. A one-sided/partial wrap (e.g. a stray leading "$" with no
+        closing one) is stripped before rewrapping, so it can't nest into "$$...$".
         """
         if text is None:
             return None
@@ -336,12 +337,24 @@ class DataProcessingPipeline:
         if not t:
             return None
         already_wrapped = (
-            (t.startswith("$") and t.endswith("$"))
+            (t.startswith("$") and t.endswith("$") and len(t) > 1)
             or (t.startswith("\\[") and t.endswith("\\]"))
             or (t.startswith("\\(") and t.endswith("\\)"))
             or (t.startswith("\\boxed{") and t.endswith("}"))
         )
-        return t if already_wrapped else f"${t}$"
+        if already_wrapped:
+            return t
+
+        for opener in ("\\[", "\\(", "$$", "$"):
+            if t.startswith(opener):
+                t = t[len(opener):].strip()
+                break
+        for closer in ("\\]", "\\)", "$$", "$"):
+            if t.endswith(closer):
+                t = t[:-len(closer)].strip()
+                break
+
+        return f"${t}$"
 
     async def _process_task(self, task: dict, posts: list[dict], url: str, title: str,
                             label: str) -> tuple[dict | None, dict | None]:
