@@ -451,7 +451,7 @@ class DataProcessingPipeline:
                             if not self.quiet:
                                 print(f"  {label} -> Solution failed grading: {grading_reason}. Discarding.")
                             self.stats["filtered_out"] += 1
-                            self.stats["failed_grading"] += 1
+                            self.stats["llm_parse_errors"] += 1
                         else:
                             self.stats["kept"] += 1
                             success = True
