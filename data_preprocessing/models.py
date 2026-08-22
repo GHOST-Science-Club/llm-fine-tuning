@@ -414,7 +414,7 @@ class DataProcessingPipeline:
             else:
                 try:
                     raw_answer, answer_post_idx = await self._find_correct_answer(
-                        question, posts, relevant_indices, has_inline
+                        question_clean, posts, relevant_indices, has_inline
                     )
                 except Exception as e:
                     print(f"  {label} Error while looking for correct answer! {e}")
@@ -426,7 +426,7 @@ class DataProcessingPipeline:
                     if not self.quiet:
                         print(f"  {label} -> No answer found in thread. Discarding.")
                     self.stats["filtered_out"] += 1
-                elif self._token_overlap(question, raw_answer) >= self.ANSWER_OVERLAP_THRESHOLD:
+                elif self._token_overlap(question_clean, raw_answer) >= self.ANSWER_OVERLAP_THRESHOLD:
                     if not self.quiet:
                         print(f"  {label} -> Picked answer looks like a restated question, not a real solution. Discarding.")
                     self.stats["filtered_out"] += 1
