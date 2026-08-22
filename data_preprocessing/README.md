@@ -32,8 +32,8 @@ Configuration is read from a `.env` file at the module directory.
 | `LOAD_FROM_HUB`   | `false`                       | `true` loads input from a HF Hub dataset instead of the local JSONL     |
 | `PUSH_TO_HUB`     | `false`                       | `true` pushes the clean dataset to the HF Hub instead of saving locally |
 | `SAVE_LOGS`       | `false`                       | `false` disables the diagnostic log file entirely                       |
-| `MAX_CONCURRENCY` | `5`                           | Maximum number of concurrent in-flight requests to the LLM API          |
-| `BATCH_SIZE`      | `10`                          | Threads processed per concurrent batch; checkpoint is written per batch |
+| `MAX_CONCURRENCY` | `32`                           | Maximum number of concurrent in-flight requests to the LLM API          |
+| `BATCH_SIZE`      | `128`                          | Threads processed per concurrent batch; checkpoint is written per batch |
 
 > Omitting a variable (or the whole `.env` file) falls back to `config.py`'s built-in defaults, which differ from the template above for a few fields: `API_KEY` → empty, `MODEL` → `llama3.3:70b`, `SAVE_LOGS` → `true`, `MAX_CONCURRENCY` → `8`, and `BATCH_SIZE` → `0`, which auto-computes to `2 × MAX_CONCURRENCY`.
 
