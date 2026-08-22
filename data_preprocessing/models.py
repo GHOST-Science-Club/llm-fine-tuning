@@ -7,9 +7,18 @@ from pathlib import Path
 
 from datasets import load_dataset
 
-from .utils import debug, save_dataset, LLMClient
-from .prompts import SPLIT_SYSTEM, FILTER_SYSTEM, FIND_ANSWER_SYSTEM, CLASSIFY_SYSTEM, REWRITE_SYSTEM, FIX_LATEX_SYSTEM, GRADE_SYSTEM
 from .latex_utils import normalize_latex
+from .prompts import (
+    CLASSIFY_SYSTEM,
+    FILTER_SYSTEM,
+    FIND_ANSWER_SYSTEM,
+    FIX_LATEX_SYSTEM,
+    GRADE_SYSTEM,
+    REWRITE_SYSTEM,
+    SPLIT_SYSTEM,
+)
+from .utils import LLMClient, debug, save_dataset
+
 
 class Category(str, Enum):
     EXACT_VALUE = "EXACT_VALUE"
@@ -312,28 +321,6 @@ class DataProcessingPipeline:
         return len(ta & tb) / len(ta | tb)
 
     @staticmethod
-    def _clean_boxed_delimiters(text: str) -> str:
-        """
-        Collapses a redundant inline $...$ wrapper nested directly inside an outer
-        display-math wrapper ($$...$$ or \\[...\\]) around the same content, e.g.
-        "$$ $ \\boxed{1} $ $$" -> "$$ \\boxed{1} $$". The LLM produces this nesting bug
-        inconsistently despite prompt instructions, so it's fixed deterministically here.
-        """
-        text = re.sub(
-            r"\$\$\s*\$(.*?)\$\s*\$\$",
-            lambda m: f"$$ {m.group(1).strip()} $$",
-            text,
-            flags=re.DOTALL,
-        )
-        text = re.sub(
-            r"\\\[\s*\$(.*?)\$\s*\\\]",
-            lambda m: f"\\[ {m.group(1).strip()} \\]",
-            text,
-            flags=re.DOTALL,
-        )
-        return text
-
-    @staticmethod
     def _strip_math_wrappers(text: str | None) -> str | None:
         """
         Deterministically strips outer math-mode delimiters ($, $$, \\(\\), \\[\\]) and an
@@ -448,7 +435,7 @@ class DataProcessingPipeline:
                     try:
                         raw_answer_clean = await self._fix_latex(normalize_latex(raw_answer))
                         rewritten = await self._rewrite_answer(question_clean, raw_answer_clean)
-                        solution = self._clean_boxed_delimiters(await self._fix_latex(rewritten))
+                        solution = await self._fix_latex(rewritten)
                         if(len(solution) > 3*len(raw_answer_clean) ):
                             if not self.quiet:
                                 print(f"""  {label} -> WARNING: Rewritten solution is at least three times as long as raw answer. Check for verbosity.""")
