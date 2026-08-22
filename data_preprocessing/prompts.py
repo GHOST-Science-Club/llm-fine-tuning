@@ -389,17 +389,21 @@ concise, and even without a final \\textbf{Wynik} (a proof correctly ending in "
 numeric result is valid; not every problem has a single boxed answer).
 
 Additionally, extract the final answer as a separate, standalone value — this will be used \
-directly as ground truth, so it must be self-contained: strip "Krok N:" labels, \\boxed{}/LaTeX \
-display wrappers, and any restated equation or variable name from the left-hand side — keep \
-ONLY the bare result itself, e.g. "1", "m \\in [-2, 2]", "-8, 3, -1" (NOT "x = -8, 3, -1"). \
-If the problem has multiple distinct required values, use the SAME labelled format the \
-solution's \\boxed{} uses, e.g. "a = 25, b = 25, P = 625". If the solution is INVALID, or is \
-VALID but has no single final result (e.g. a proof), use NONE.
+directly as ground truth for automated LaTeX-aware grading (Math-Verify), which only extracts \
+expressions that sit inside a recognized math delimiter and ignores bare text entirely. So: \
+strip "Krok N:" labels and any restated equation or variable name from the left-hand side, then \
+wrap what remains in a single $...$ pair — ALWAYS, even for a single plain number or word, e.g. \
+"$1$", "$m \\in [-2, 2]$", "$-8, 3, -1$" (NOT "x = -8, 3, -1"). Wrap qualitative (non-numeric) \
+answers the same way, using \\text{} for words, e.g. "$\\text{Tak}$" — never leave an answer \
+unwrapped. If the problem has multiple distinct required values, use the SAME labelled format \
+the solution's \\boxed{} uses, still inside one $...$ pair, e.g. "$a = 25, b = 25, P = 625$". If \
+the solution is INVALID, or is VALID but has no single final result (e.g. a proof), use NONE \
+(do not wrap NONE in delimiters).
 
 Respond with exactly three lines:
 VERDICT: VALID   (or INVALID)
 REASON: one short sentence
-FINAL_ANSWER: <the bare final result, or NONE>
+FINAL_ANSWER: <the final result wrapped in $...$, or NONE>
 
 --- Example 1: valid — concise, correct, no Wynik needed ---
 Problem: Udowodnij, że dla każdej liczby całkowitej n wyrażenie n^2+n jest parzyste.
@@ -427,12 +431,12 @@ REASON: The worked derivation and boxed result solve a different surface's area,
 sphere the problem asks about — the real answer is dismissed as a side note in Krok 5.
 FINAL_ANSWER: NONE
 
---- Example 4: valid — final answer extracted as a bare, standalone value (no restated LHS) ---
+--- Example 4: valid — final answer extracted as a standalone, math-wrapped value (no restated LHS) ---
 Problem: Rozwiąż równanie: sqrt(3) sin x + cos x = m dla jakich m istnieje rozwiązanie.
 Solution: Krok 1-7: [amplitude-phase derivation] ... \\textbf{Wynik:} \\[ \\boxed{m \\in [-2, 2]} \\]
 VERDICT: VALID
 REASON: Complete, correct derivation using the amplitude-phase method, correct final bound.
-FINAL_ANSWER: m \\in [-2, 2]
+FINAL_ANSWER: $m \\in [-2, 2]$
 
 --- Example 5: valid — multiple required values, labelled format carried through ---
 Problem: Rolnik ma 100m siatki i chce ogrodzić prostokątną działkę o największym polu. Podaj wymiary.
@@ -440,7 +444,7 @@ Solution: Krok 1-3: [derivation via a+b=50, P=a(50-a), maximized at a=25] ... \\
 \\[ \\boxed{a = 25,\\ b = 25,\\ P = 625\\ \\text{m}^2} \\]
 VERDICT: VALID
 REASON: Complete, correct optimization; all three required quantities are derived and boxed.
-FINAL_ANSWER: a = 25, b = 25, P = 625
+FINAL_ANSWER: $a = 25, b = 25, P = 625$
 
 --- Example 6: valid — single-unknown equation, LHS stripped from FINAL_ANSWER too ---
 Problem: Rozwiąż równanie sin x = 0.
@@ -448,7 +452,7 @@ Solution: Krok 1: sin x = 0. Krok 2: Stąd x = k*pi dla k całkowitego. \\textbf
 \\[ \\boxed{k\\pi,\\ k \\in \\mathbb{Z}} \\]
 VERDICT: VALID
 REASON: Correct, complete solution to the equation.
-FINAL_ANSWER: k\\pi, k \\in \\mathbb{Z}
+FINAL_ANSWER: $k\\pi, k \\in \\mathbb{Z}$
 
 --- Example 7: valid — qualitative yes/no answer, single word not a sentence ---
 Problem: Czy prawdopodobieństwo wylosowania czarnej kuli wzrosło po dodaniu kul?
@@ -456,7 +460,7 @@ Solution: Krok 1: Nowe prawdopodobieństwo to 5/9, wcześniejsze 4/8=1/2. Krok 2
 5/9 > 1/2, prawdopodobieństwo wzrosło. \\textbf{Wynik:} \\[ \\boxed{\\text{Tak}} \\]
 VERDICT: VALID
 REASON: Correct comparison, correct conclusion.
-FINAL_ANSWER: Tak
+FINAL_ANSWER: $\\text{Tak}$
 
 --- Example 8: invalid — looks complete, but recomputing the arithmetic catches a real error ---
 Problem: Funkcja pola opakowania to P(x) = 12x^2 + 3/x. Wyznacz x minimalizujące P oraz podaj \

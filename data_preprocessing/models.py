@@ -321,28 +321,27 @@ class DataProcessingPipeline:
         return len(ta & tb) / len(ta | tb)
 
     @staticmethod
-    def _strip_math_wrappers(text: str | None) -> str | None:
+    def _ensure_math_wrapped(text: str | None) -> str | None:
         """
-        Deterministically strips outer math-mode delimiters ($, $$, \\(\\), \\[\\]) and an
-        outer \\boxed{} wrapper from an extracted final answer. GRADE_SYSTEM is instructed
-        to already return a bare value, but that instruction isn't followed reliably every
-        time, so this is a belt-and-suspenders cleanup rather than the only line of defense.
+        Deterministically guarantees an extracted final answer is wrapped in a LaTeX math
+        delimiter ($...$, \\[...\\], \\(...\\), or \\boxed{...}). Math-Verify only extracts
+        expressions inside a recognized delimiter — a bare "m \\in [-2, 2]" is invisible to
+        it. GRADE_SYSTEM is instructed to already wrap the answer, but that instruction isn't
+        followed reliably every time, so this is a belt-and-suspenders fallback rather than
+        the only line of defense.
         """
         if text is None:
             return None
         t = text.strip()
-        changed = True
-        while changed:
-            changed = False
-            for open_d, close_d in (("$$", "$$"), ("\\[", "\\]"), ("\\(", "\\)"), ("$", "$")):
-                if t.startswith(open_d) and t.endswith(close_d) and len(t) > len(open_d) + len(close_d):
-                    t = t[len(open_d):-len(close_d)].strip()
-                    changed = True
-                    break
-            if t.startswith("\\boxed{") and t.endswith("}"):
-                t = t[len("\\boxed{"):-1].strip()
-                changed = True
-        return t
+        if not t:
+            return None
+        already_wrapped = (
+            (t.startswith("$") and t.endswith("$"))
+            or (t.startswith("\\[") and t.endswith("\\]"))
+            or (t.startswith("\\(") and t.endswith("\\)"))
+            or (t.startswith("\\boxed{") and t.endswith("}"))
+        )
+        return t if already_wrapped else f"${t}$"
 
     async def _process_task(self, task: dict, posts: list[dict], url: str, title: str,
                             label: str) -> tuple[dict | None, dict | None]:
@@ -445,7 +444,7 @@ class DataProcessingPipeline:
                         grading = await self._grade_solution(question_clean, solution)
 
                         grading_reason = grading.get("reason", "")
-                        final_answer = self._strip_math_wrappers(grading["final_answer"])
+                        final_answer = self._ensure_math_wrapped(grading["final_answer"])
 
                         if not grading["valid"]:
                             if not self.quiet:
