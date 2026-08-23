@@ -1,9 +1,5 @@
 import re
 
-# ---------------------------------------------------------------------------
-# LaTeX normalisation
-# ---------------------------------------------------------------------------
-
 def _fix_displaystyle_blocks(text: str) -> str:
     """
     Replace \\(\\displaystyle{...}\\) with \\[...\\].
@@ -47,7 +43,7 @@ def normalize_latex(text: str) -> str:
       3. Remaining \\(...\\) inline math → $...$
       4. Empty superscripts  ^{}  removed
       5. Leading spaces inside index braces  _{  x  → _{x
-      6. Bare ...  →  \\cdots
+      6. Bare ...  →  \\cdots, but only inside $...$/$$...$$/\\[...\\] math spans
     """
     # 1. Unicode whitespace variants
     text = text.replace('\u00a0', ' ')   # non-breaking space
@@ -66,7 +62,13 @@ def normalize_latex(text: str) -> str:
     # 5. Clean leading spaces inside _{ and ^{
     text = re.sub(r'([_^])\{\s+', r'\1{', text)
 
-    # 6. Bare ... → \cdots  (not preceded by a dot or backslash)
-    text = re.sub(r'(?<![.\\])\.\.\.', r'\\cdots', text)
+    # 6. Bare ... → \cdots, but only inside $...$/$$...$$/\[...\] math spans —
+    # an ellipsis in surrounding plain-language prose (e.g. "Nie wiem... pomóżcie")
+    # is left untouched instead of being spliced with a raw LaTeX command.
+    math_span_re = re.compile(r'(\$\$.*?\$\$|\\\[.*?\\\]|\$.*?\$)', re.DOTALL)
+    text = math_span_re.sub(
+        lambda m: re.sub(r'(?<![.\\])\.\.\.', r'\\cdots', m.group(0)),
+        text,
+    )
 
     return text
