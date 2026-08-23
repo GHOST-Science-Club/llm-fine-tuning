@@ -399,7 +399,7 @@ class DataProcessingPipeline:
         raw_answer_clean = None
         answer_post_idx = None
         solution = None
-        grading_reason = None
+        grading_reason : str | None = None
         final_answer = None
         success = False
 
@@ -459,16 +459,19 @@ class DataProcessingPipeline:
                         except Exception as e:
                             print(f"  {label} Error while grading solution! {e}")
                             grading = {"valid": False, "reason": "Error during grading", "final_answer": None}
-                            self.stats["failed_grading"] += 1
+                            self.stats["llm_parse_errors"] += 1
 
-                        grading_reason = grading.get("reason", "")
-                        final_answer = self._ensure_math_wrapped(grading["final_answer"])
+                        grading_reason = str(grading.get("reason", "")) if grading.get("reason") is not None else None
+
+                        # syntactic sugar here, but I couldn't find a way to pass the type checker otherwise
+                        if isinstance(grading.get("final_answer"), str):
+                            final_answer = self._ensure_math_wrapped(str(grading["final_answer"]))
 
                         if not grading["valid"]:
                             if not self.quiet:
                                 print(f"  {label} -> Solution failed grading: {grading_reason}. Discarding.")
                             self.stats["filtered_out"] += 1
-                            self.stats["llm_parse_errors"] += 1
+                            self.stats["grading_failed"] += 1
                         else:
                             self.stats["kept"] += 1
                             success = True
