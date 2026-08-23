@@ -386,12 +386,6 @@ class DataProcessingPipeline:
             self.stats["llm_parse_errors"] +=  1
             print(f"  {label} Error while filtering question! {e}")
             return None, None
-        try:
-            question_clean = await self._fix_latex(question)
-        except Exception as e:
-            self.stats["llm_parse_errors"] += 1
-            print(f"  {label} Error while cleaning question! {e}")
-            return None, None
 
         # Accumulate fields as the task progresses through the steps.
         category = None
@@ -409,6 +403,14 @@ class DataProcessingPipeline:
                 print(f"  {label} -> DISCARDED: {filt['reason']}")
             self.stats["filtered_out"] += 1
         else:
+            # Clean question only once we know it's worth keeping, 
+            # to avoid wasting LLM calls on a question that will be discarded.
+            try:
+                question_clean = await self._fix_latex(question)
+            except Exception as e:
+                self.stats["llm_parse_errors"] += 1
+                print(f"  {label} Error while cleaning question! {e}")
+                return None, None
             try:
                 classification = await self._classify_question(question_clean)
                 category = classification.get("category", None)
@@ -471,7 +473,7 @@ class DataProcessingPipeline:
                             if not self.quiet:
                                 print(f"  {label} -> Solution failed grading: {grading_reason}. Discarding.")
                             self.stats["filtered_out"] += 1
-                            self.stats["grading_failed"] += 1
+                            self.stats["failed_grading"] += 1
                         else:
                             self.stats["kept"] += 1
                             success = True
