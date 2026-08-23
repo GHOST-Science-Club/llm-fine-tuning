@@ -248,7 +248,7 @@ class DataProcessingPipeline:
             raw = await self.llm.call(GRADE_SYSTEM, user_prompt)
         except Exception as e:
             debug("STEP 5 — grade_solution | error", f"Error occurred while calling LLM: {e}")
-            raw = ""
+            raise Exception(f"Error during grading solution: {e}")
         debug("STEP 5 — grade_solution | raw LLM output", raw)
 
         valid = False # assume invalid unless explicitly marked valid
