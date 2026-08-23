@@ -388,13 +388,14 @@ class DataProcessingPipeline:
             return None, None
 
         # Accumulate fields as the task progresses through the steps.
-        category = None
-        category_reason = None
-        raw_answer_clean = None
-        answer_post_idx = None
-        solution = None
+        question_clean : str | None = question
+        category : str | None = None
+        category_reason : str | None = None
+        raw_answer_clean : str | None = None
+        answer_post_idx : int | None = None
+        solution : str | None = None
         grading_reason : str | None = None
-        final_answer = None
+        final_answer : str | None = None
         success = False
 
         # Step A: Filter check
