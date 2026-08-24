@@ -9,16 +9,7 @@ async def _run(quiet: bool) -> None:
     # The LLMClient owns the async HTTP client; `async with` guarantees it is
     # closed when the pipeline finishes (or raises).
     async with LLMClient(config) as llm:
-        pipeline = DataProcessingPipeline(
-            config.INPUT_SOURCE,
-            config.OUTPUT_FILE,
-            config.DATASET_DESTINATION,
-            config.CHECKPOINT_FILE,
-            llm=llm,
-            batch_size=config.BATCH_SIZE,
-            log_file=config.LOG_FILE,
-            quiet=quiet,
-        )
+        pipeline = DataProcessingPipeline(config, llm=llm, quiet=quiet)
         await pipeline.run()
 
 
