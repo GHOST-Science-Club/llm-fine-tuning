@@ -7,6 +7,7 @@ from pathlib import Path
 
 from datasets import load_dataset
 
+from .config import PipelineConfig
 from .latex_utils import normalize_latex
 from .prompts import (
     CLASSIFY_SYSTEM,
@@ -28,29 +29,20 @@ class Category(str, Enum):
 
 class DataProcessingPipeline:
 
-    def __init__(self, input_source: Path | str, 
-                 output_file: Path, 
-                 dataset_destination: Path | str, 
-                 checkpoint_file: Path, llm: LLMClient, batch_size: int,
-                 clean_fields: tuple[str, ...],
-                 answer_overlap_threshold: float,
-                 question_length_threshold: int,
-                 solution_length_threshold: int ,
-                 log_file: Path | None = None,
-                 quiet: bool = False):
-        self.input_source = input_source
-        self.output_file = output_file
-        self.log_file = log_file
-        self.dataset_destination = dataset_destination
-        self.checkpoint_file = checkpoint_file
+    def __init__(self, config: PipelineConfig, llm: LLMClient, quiet: bool = False):
+        self.input_source = config.input_source
+        self.output_file = config.output_file
+        self.log_file = config.log_file
+        self.dataset_destination = config.dataset_destination
+        self.checkpoint_file = config.checkpoint_file
         self.llm = llm
-        self.batch_size = batch_size
+        self.batch_size = config.batch_size
         self.raw_data = []
         self.quiet = quiet
-        self.answer_overlap_threshold = answer_overlap_threshold
-        self.question_length_threshold = question_length_threshold
-        self.solution_length_threshold = solution_length_threshold
-        self.clean_fields = clean_fields
+        self.answer_overlap_threshold = config.answer_overlap_threshold
+        self.question_length_threshold = config.question_length_threshold
+        self.solution_length_threshold = config.solution_length_threshold
+        self.clean_fields = config.clean_fields
         self.stats = {
             "loaded": 0,
             "filtered_out": 0,

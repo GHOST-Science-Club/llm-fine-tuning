@@ -20,10 +20,19 @@ class PipelineConfig:
 
     data_dir: Path = field(default_factory=lambda: _MODULE_PATH / "data")
 
+    # Local input/output paths, relative to data_dir unless an absolute path is given.
+    input_file_name: str = field(default_factory=lambda: os.getenv("INPUT_FILE", "input/forum_example_fixed.jsonl"))
+    output_file_name: str = field(default_factory=lambda: os.getenv("OUTPUT_FILE", "output/pipeline_output.jsonl"))
+
     input_file: Path = field(init=False)
     output_file: Path = field(init=False)
     log_file: Path | None = field(init=False)
+    dataset_file: Path = field(init=False)
     checkpoint_file: Path = field(init=False)
+
+    # Hugging Face Hub dataset ids used when load_from_hub / push_to_hub are enabled.
+    hub_dataset_source: str = field(default_factory=lambda: os.getenv("HUB_DATASET_SOURCE", "meta-math/MetaMathQA"))
+    hub_dataset_destination: str = field(default_factory=lambda: os.getenv("HUB_DATASET_DESTINATION", "erybie222/test"))
 
     # input_source and dataset_destination can be either a local file or a Hugging Face Hub dataset, depending on load_from_hub and push_to_hub flags
     input_source: str | Path = field(init=False)
@@ -51,13 +60,13 @@ class PipelineConfig:
     def __post_init__(self) -> None:
         if self.batch_size <= 0:
             self.batch_size = 2 * self.max_concurrency
-        self.input_file = self.data_dir / "input" / "forum_example_fixed.jsonl"
-        self.output_file = self.data_dir / "output" / "pipeline_output.jsonl"
+        self.input_file = self.data_dir / self.input_file_name
+        self.output_file = self.data_dir / self.output_file_name
         self.log_file = self.data_dir / "logs" / "pipeline_logs.jsonl" if self.save_logs else None
         self.dataset_file = self.data_dir / "dataset" / "pipeline_output.jsonl"
         self.checkpoint_file = self.data_dir / "checkpoint" / "checkpoint.txt"
-        self.input_source = "meta-math/MetaMathQA" if self.load_from_hub else self.input_file
-        self.dataset_destination = "erybie222/test" if self.push_to_hub else self.dataset_file
+        self.input_source = self.hub_dataset_source if self.load_from_hub else self.input_file
+        self.dataset_destination = self.hub_dataset_destination if self.push_to_hub else self.dataset_file
         self.clean_fields = ("source_url", "question", "category", "solution", "final_answer")
         self.answer_overlap_threshold = 0.85
         self.question_length_threshold = 1000
