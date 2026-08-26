@@ -43,6 +43,28 @@ DEFAULT_OUTPUT_DIR = str(ROOT / "data" / "decontaminated")
 DEFAULT_INDEX_DIR = str(ROOT / "data" / "decont_index")
 
 
+# ── shared config ───────────────────────────────────────────────────────────────
+
+BENCHMARK_LANGUAGE = "pl"
+
+
+def make_config(ngram_size: int) -> NGramsDecontConfig:
+    """
+    One config for both stages — the index and the filter MUST hash identically,
+    otherwise nothing ever matches.
+
+    norm_numbers=False: the default normalisation replaces every digit with 0, which
+    destroys math text. "Krok 1: $2x^{3} - x^{2} = 112$" becomes "krok 0 0x 0 x 0 0",
+    so unrelated problems collide on n-grams like "0 x 0 0 x 0 0 x 0". Keeping the
+    digits leaves "krok 1 2x 3 x 2 112", which actually identifies a problem.
+    """
+    return NGramsDecontConfig(
+        n_grams=ngram_size,
+        find_query_ngrams=True,
+        norm_config=TextNormConfig(norm_numbers=False),
+    )
+
+
 # ── Stage 1: build index ────────────────────────────────────────────────────────
 
 def _is_hf_dataset_dir(path: Path) -> bool:
@@ -117,8 +139,8 @@ def build_index(
     .index.hashes binary file per benchmark task so NGramsDecontFilter can
     report exactly which benchmark task a removed training example matched.
     """
-    config = NGramsDecontConfig(n_grams=ngram_size, find_query_ngrams=True)
-    tokenizer = load_word_tokenizer("pl")
+    config = make_config(ngram_size)
+    tokenizer = load_word_tokenizer(BENCHMARK_LANGUAGE)
     hash_func = create_hash_func(config.hash_config)
     norm_config = config.norm_config
 
@@ -168,17 +190,18 @@ def run_filter(
     output_dir: str,
     ngram_size: int,
     limit: int,
+    text_key: list[str],
 ) -> None:
     """
     Runs datatrove pipeline: LocalHFDatasetReader → NGramsDecontFilter → JsonlWriter.
-    Training doc.text = 'question' field (checked against benchmark n-gram index).
+    Training doc.text = the --text-key columns joined, checked against the benchmark index.
     """
     output_path = Path(output_dir)
     jsonl_output = str(output_path / "clean")
     removed_output = str(output_path / "removed")
 
-    config = NGramsDecontConfig(n_grams=ngram_size, find_query_ngrams=True)
-    dataset_readers = make_dataset_readers(dataset_paths, text_key=["question", "raw_answer"], limit=limit)
+    config = make_config(ngram_size)
+    dataset_readers = make_dataset_readers(dataset_paths, text_key=text_key, limit=limit)
 
     for i, reader in enumerate(dataset_readers):
         source = reader.path if hasattr(reader, "path") else getattr(reader, "repo_id", None) or getattr(reader, "data_folder", repr(reader))
@@ -191,6 +214,8 @@ def run_filter(
                     index_folder=index_dir,
                     config=config,
                     exclusion_writer=JsonlWriter(removed_output),
+                    # must match build_index: the filter defaults to English
+                    language=BENCHMARK_LANGUAGE,
                 ),
                 JsonlWriter(jsonl_output),
             ],
@@ -239,6 +264,9 @@ def main():
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--ngram-size", type=int, default=9,
                         help="N-gram size (default: 9, same as datatrove's default)")
+    parser.add_argument("--text-key", nargs="+", default=["question", "raw_answer"],
+                        help="Dataset column(s) checked against the benchmark index. "
+                             "Include the answer column, not just the question.")
     parser.add_argument("--limit", type=int, default=-1)
     args = parser.parse_args()
 
@@ -256,6 +284,7 @@ def main():
         output_dir=args.output_dir,
         ngram_size=args.ngram_size,
         limit=args.limit,
+        text_key=args.text_key,
     )
 
 
