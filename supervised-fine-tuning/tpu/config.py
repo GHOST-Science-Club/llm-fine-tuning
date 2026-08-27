@@ -106,6 +106,11 @@ class Config:
         self.PROJECT_RUN_NAME = f"{self.PROJECT_NAME}-{self.RUN_NAME}"
         if self.PUSH_TO_HUB and not self.HF_USER:
             raise ValueError("PUSH_TO_HUB=true but HF_USER is not set. Set HF_USER in .env to your HF username.")
+        # Fail here rather than after hours of training: without a token the push at
+        # the very end is the first thing that notices, and hub_token="" is sent as an
+        # empty bearer instead of falling back to the cached login().
+        if self.PUSH_TO_HUB and not self.HF_TOKEN:
+            raise ValueError("PUSH_TO_HUB=true but HF_TOKEN is not set. Set HF_TOKEN in .env.")
         self.HUB_MODEL_NAME = f"{self.HF_USER}/{self.PROJECT_RUN_NAME}"
         self.OUTPUT_DIR = f"models/{self.PROJECT_RUN_NAME}"
 
