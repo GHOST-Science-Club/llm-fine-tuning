@@ -1,5 +1,5 @@
-from config import parse_args
-from splitter import split_dataset
+from .config import parse_args
+from .splitter import split_dataset
 
 
 def main() -> None:

@@ -1,0 +1,7 @@
+__pycache__/
+data/raw/
+data/formatted/
+.venv/
+.vscode/
+.idea/
+

@@ -12,7 +12,7 @@ DEFAULT_FORMATTED_DIR = DEFAULT_DATA_DIR / "formatted"
 class Config:
     """Configuration settings for dataset splitting."""
 
-    input_file: Path | str = DEFAULT_FORMATTED_DIR / "deduplicated.jsonl"
+    input_file: Path | str = DEFAULT_FORMATTED_DIR / "dataset.jsonl"
     sft_file: Path | str = DEFAULT_FORMATTED_DIR / "sft.jsonl"
     grpo_file: Path | str = DEFAULT_FORMATTED_DIR / "grpo.jsonl"
     sft_ratio: float = 0.1
@@ -26,6 +26,7 @@ class Config:
 
     def ensure_directories(self) -> None:
         """Ensures that the output directories exist on disk."""
+        self.input_file.parent.mkdir(parents=True, exist_ok=True)
         self.sft_file.parent.mkdir(parents=True, exist_ok=True)
         self.grpo_file.parent.mkdir(parents=True, exist_ok=True)
 
