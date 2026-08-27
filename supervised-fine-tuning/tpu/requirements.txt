@@ -1,0 +1,27 @@
+# PyTorch/XLA — the TPU backend. The MINOR version of torch and torch_xla must
+# match (both 2.8 here); patch levels may differ, as they do below, because the
+# two projects cut patch releases independently. The 2.8.0/2.8.1 pair below is
+# the combination verified end-to-end on a real TPU (Colab v5e-1).
+# The extra find-links host the libtpu runtime wheels.
+# For a LOCAL smoke test without any TPU, install torch_xla WITHOUT the [tpu]
+# extra instead — see the "Testing without the grant" section of README.md
+# for the exact commands (as of writing, PyPI has 2.8.0/2.8.1/2.9.0 wheels
+# for Python 3.12, not 2.7.x; check `pip index versions torch_xla`).
+-f https://storage.googleapis.com/libtpu-releases/index.html
+-f https://storage.googleapis.com/libtpu-wheels/index.html
+torch==2.8.0
+torch_xla[tpu]==2.8.1
+
+transformers<5.0.0
+peft
+# >=0.23.1: fixes the bug where SFTTrainer froze LoRA adapters (see showcase notes)
+trl>=0.23.1
+datasets
+huggingface_hub
+wandb
+python-dotenv
+accelerate
+sentencepiece
+protobuf
+# changed vs gpu/requirements.txt: no bitsandbytes (CUDA-only, would fail to
+# even import on a TPU VM) and no +cu124 torch build

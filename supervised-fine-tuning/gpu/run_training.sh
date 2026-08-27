@@ -28,7 +28,7 @@ else
     exit 1
 fi
 
-SFT_DIR="$PROJECT/supervised-fine-tuning"
+SFT_DIR="$PROJECT/supervised-fine-tuning/gpu"
 
 export HF_HOME="$PROJECT/hf_cache"
 mkdir -p "$HF_HOME"

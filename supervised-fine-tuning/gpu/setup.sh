@@ -15,7 +15,7 @@ else
     exit 1
 fi
 
-SFT_DIR="$PROJECT/supervised-fine-tuning"
+SFT_DIR="$PROJECT/supervised-fine-tuning/gpu"
 
 export TMPDIR="$PROJECT/pip_tmp"
 export PIP_CACHE_DIR="$PROJECT/pip_cache"
