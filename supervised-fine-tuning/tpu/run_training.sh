@@ -2,7 +2,9 @@
 # Launch training on the TPU VM.
 # changed vs gpu/run_training.sh: no SLURM (#SBATCH) — on a TPU VM you just run
 # the script directly; the TPU is already attached to the machine.
-set -e
+# pipefail matters here: train.py is piped into tee, so without it the script's
+# exit status is tee's (always 0) and a crashed run would report success.
+set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ -f ".env" ]; then

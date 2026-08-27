@@ -2,7 +2,7 @@
 # One-time setup on a Google Cloud TPU VM (or any machine for CPU smoke tests).
 # changed vs gpu/setup.sh: no SLURM/module-load and no grant storage paths —
 # a TPU VM is a plain machine you SSH into; everything lives next to the code.
-set -e
+set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ ! -d venv ]; then

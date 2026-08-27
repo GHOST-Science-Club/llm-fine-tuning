@@ -72,7 +72,7 @@ pip install --upgrade pip
 # As of writing PyPI has no 2.7.x wheels for Python 3.12; pin a matched pair instead
 # (check `pip index versions torch_xla` if this drifts):
 pip install torch_xla~=2.8.0
-pip install torch==2.8.0   # must match the torch_xla version exactly
+pip install torch==2.8.0   # same MINOR version as torch_xla (2.8); patch levels may differ
 
 # the rest of the stack (skip requirements.txt — it's pinned for the [tpu] extra)
 pip install "transformers<5.0.0" peft "trl>=0.23.1" datasets huggingface_hub \

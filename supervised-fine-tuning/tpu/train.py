@@ -45,9 +45,14 @@ class Trainer:
         # step into a fixed program on first use — for an 11B model this can take
         # many minutes and looks like a hang at step 0. The cache stores the
         # compiled program on disk so every later run starts immediately.
+        # The cache is an optimisation, never a requirement — nothing here may take
+        # down a multi-hour run. Catch broadly: an unwritable ~/.cache (OSError),
+        # a renamed API (AttributeError/TypeError) and XLA runtime errors are all
+        # equally survivable. KeyboardInterrupt/SystemExit derive from
+        # BaseException, so Ctrl+C still works.
         try:
             xr.initialize_cache(os.path.expanduser("~/.cache/xla_compile"), readonly=False)
-        except (AttributeError, RuntimeError) as e:
+        except Exception as e:
             print(f"Warning: could not enable the XLA compilation cache: {e}")
 
         # changed: SPMD mode is what lets FSDPv2 shard the model across all TPU
@@ -227,12 +232,20 @@ class Trainer:
         print("(the first optimization step compiles the XLA graph — a long pause there is normal)")
         try:
             fine_tuning.train()
+        # ConnectionError/TimeoutError are OSError subclasses, so they must be caught
+        # first — hub_strategy="every_save" uploads mid-training, and a failed upload
+        # would otherwise be reported as a disk problem.
+        except (ConnectionError, TimeoutError) as e:
+            raise RuntimeError("Training interrupted by a network error (Hub upload?). Check connectivity and HF_TOKEN.") from e
         except OSError as e:
             raise RuntimeError("Training interrupted due to a disk error. Check available disk space and OUTPUT_DIR permissions.") from e
 
         if cfg.PUSH_TO_HUB:
-            print(f"Pushing trained model to HF Hub: {cfg.PROJECT_RUN_NAME}...")
-            fine_tuning.model.push_to_hub(cfg.PROJECT_RUN_NAME, private=True)
+            # cfg.HUB_MODEL_NAME, not PROJECT_RUN_NAME: an unqualified name resolves to
+            # the token owner's namespace, which is the wrong repo whenever HF_USER is
+            # an org. Must match hub_model_id in _build_sft_config().
+            print(f"Pushing trained model to HF Hub: {cfg.HUB_MODEL_NAME}...")
+            fine_tuning.model.push_to_hub(cfg.HUB_MODEL_NAME, private=True)
 
         if cfg.LOG_TO_WANDB:
             wandb.finish()
