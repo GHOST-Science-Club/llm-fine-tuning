@@ -12,7 +12,7 @@ DEFAULT_FORMATTED_DIR = DEFAULT_DATA_DIR / "formatted"
 class Config:
     """Configuration settings for dataset splitting."""
 
-    input_file: Path | str = DEFAULT_FORMATTED_DIR / "dataset.jsonl"
+    input_file: Path | str = DEFAULT_RAW_DIR / "dataset.jsonl"
     sft_file: Path | str = DEFAULT_FORMATTED_DIR / "sft.jsonl"
     grpo_file: Path | str = DEFAULT_FORMATTED_DIR / "grpo.jsonl"
     sft_ratio: float = 0.1
