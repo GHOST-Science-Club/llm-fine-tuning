@@ -127,7 +127,8 @@ def run_dedup(
             # skip dedup filter — just copy everything to clean output
             LocalPipelineExecutor(
                 pipeline=[reader, JsonlWriter(jsonl_clean)],
-                tasks=1,
+                tasks=tasks,
+                start_method=start_method,
                 logging_dir=logs_filter,
             ).run()
         else:
@@ -140,7 +141,10 @@ def run_dedup(
                     ),
                     JsonlWriter(jsonl_clean),
                 ],
-                tasks=1,
+                # must match stage 1: MinhashDedupFilter reads clusters/{rank}.remove,
+                # so tasks=1 here would apply only shard 0's removals to the whole corpus
+                tasks=tasks,
+                start_method=start_method,
                 logging_dir=logs_filter,
             ).run()
 
@@ -192,7 +196,7 @@ def main():
                         help="Number of LSH buckets (default: 14). More buckets = better recall.")
     parser.add_argument("--tasks", type=int, default=14,
                         help="Number of parallel workers (default: 14). Must be divisible by --num-buckets.")
-    parser.add_argument("--hashes-per-bucket", type=int, default=3,
+    parser.add_argument("--hashes-per-bucket", type=int, default=6,
                         help="Hashes per LSH bucket — lower = catches more near-duplicates (default: 3).")
     parser.add_argument("--limit", type=int, default=-1,
                         help="Max documents per source, -1 for all (useful for testing).")
